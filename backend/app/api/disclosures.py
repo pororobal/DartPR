@@ -172,7 +172,7 @@ async def trigger_poll(user: dict = Depends(require_plan("pro"))):
 # ---------------------------------------------------------------------------
 
 @router.post("/reclassify")
-async def reclassify_disclosures():
+async def reclassify_disclosures(user: dict = Depends(require_plan("pro"))):
     """
     Re-run _guess_category + compute_score on all existing disclosures.
     Fixes data inserted before the keyword-priority fix.
