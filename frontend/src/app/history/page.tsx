@@ -1,0 +1,190 @@
+"use client";
+
+import { useState, useEffect, useCallback } from "react";
+import { supabase } from "@/lib/supabase";
+import { disclosures, DisclosureItem } from "@/lib/api";
+import DisclosureCard from "@/components/DisclosureCard";
+import { Search, ChevronLeft, ChevronRight, AlertCircle } from "lucide-react";
+
+const categories = [
+  { value: "", label: "전체" },
+  { value: "CAPITAL_RAISING", label: "자금조달" },
+  { value: "BIOTECH", label: "바이오" },
+  { value: "BUSINESS_CONTRACT", label: "영업계약" },
+  { value: "EARNINGS", label: "실적" },
+  { value: "SHAREHOLDER_RETURN", label: "주주환원" },
+  { value: "DELISTING_RISK", label: "상장위험" },
+];
+
+export default function HistoryPage() {
+  const [items, setItems] = useState<DisclosureItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const perPage = 20;
+
+  // Filters
+  const [ticker, setTicker] = useState("");
+  const [category, setCategory] = useState("");
+  const [scoreMin, setScoreMin] = useState("");
+  const [scoreMax, setScoreMax] = useState("");
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      const token = session?.session?.access_token;
+
+      const params: Record<string, string | number> = { page, per_page: perPage };
+      if (ticker) params.ticker = ticker;
+      if (category) params.category = category;
+      if (scoreMin) params.dvi_score_min = Number(scoreMin);
+      if (scoreMax) params.dvi_score_max = Number(scoreMax);
+
+      const search = new URLSearchParams();
+      Object.entries(params).forEach(([k, v]) => search.set(k, String(v)));
+
+      const headers: Record<string, string> = {};
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      const res = await fetch(`/api/v1/disclosures/history?${search}`, { headers });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const result = await res.json();
+      setItems(result.data || []);
+      setTotal(result.total || 0);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to fetch");
+    } finally {
+      setLoading(false);
+    }
+  }, [page, ticker, category, scoreMin, scoreMax]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const totalPages = Math.ceil(total / perPage);
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPage(1);
+    fetchData();
+  };
+
+  return (
+    <div className="max-w-3xl mx-auto px-4 py-8">
+      <h1 className="text-xl font-bold text-white mb-6">히스토리</h1>
+
+      {/* Search form */}
+      <form onSubmit={handleSearch} className="card p-4 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <label className="text-[10px] text-[var(--text-muted)] font-bold uppercase tracking-wider">종목</label>
+            <input
+              type="text"
+              value={ticker}
+              onChange={(e) => setTicker(e.target.value)}
+              placeholder="종목코드"
+              className="w-full mt-1 bg-[var(--bg-hover)] border border-[var(--border-color)] rounded px-2.5 py-1.5 text-xs text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-mint)]"
+            />
+          </div>
+          <div>
+            <label className="text-[10px] text-[var(--text-muted)] font-bold uppercase tracking-wider">카테고리</label>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="w-full mt-1 bg-[var(--bg-hover)] border border-[var(--border-color)] rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-[var(--accent-mint)]"
+            >
+              {categories.map((c) => (
+                <option key={c.value} value={c.value}>{c.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-[10px] text-[var(--text-muted)] font-bold uppercase tracking-wider">최소 점수</label>
+            <input
+              type="number"
+              value={scoreMin}
+              onChange={(e) => setScoreMin(e.target.value)}
+              placeholder="0"
+              min="0"
+              max="100"
+              className="w-full mt-1 bg-[var(--bg-hover)] border border-[var(--border-color)] rounded px-2.5 py-1.5 text-xs text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-mint)]"
+            />
+          </div>
+          <div>
+            <label className="text-[10px] text-[var(--text-muted)] font-bold uppercase tracking-wider">최대 점수</label>
+            <input
+              type="number"
+              value={scoreMax}
+              onChange={(e) => setScoreMax(e.target.value)}
+              placeholder="100"
+              min="0"
+              max="100"
+              className="w-full mt-1 bg-[var(--bg-hover)] border border-[var(--border-color)] rounded px-2.5 py-1.5 text-xs text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-mint)]"
+            />
+          </div>
+        </div>
+        <button type="submit" className="btn-primary mt-3 text-xs py-1.5 px-4 flex items-center gap-1">
+          <Search size={12} />
+          검색
+        </button>
+      </form>
+
+      {/* Results */}
+      {loading ? (
+        <div className="space-y-3">
+          {[...Array(3)].map((_, i) => (
+            <div key={i} className="card p-4">
+              <div className="shimmer h-4 w-24 mb-2" />
+              <div className="shimmer h-5 w-3/4 mb-1" />
+              <div className="shimmer h-4 w-full" />
+            </div>
+          ))}
+        </div>
+      ) : error ? (
+        <div className="text-center py-8">
+          <AlertCircle size={32} className="text-[var(--accent-red)] mx-auto mb-2" />
+          <p className="text-sm text-[var(--accent-red)]">{error}</p>
+          <button onClick={fetchData} className="btn-outline mt-3 text-xs py-1.5 px-3">재시도</button>
+        </div>
+      ) : (
+        <>
+          <p className="text-xs text-[var(--text-secondary)] mb-3">
+            총 {total}건 · 페이지 {page}/{totalPages}
+          </p>
+          <div className="space-y-3">
+            {items.map((item) => (
+              <DisclosureCard key={item.dart_rcept_no} item={item} />
+            ))}
+          </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-3 mt-6">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                className="btn-outline text-xs py-1.5 px-3 disabled:opacity-30"
+              >
+                <ChevronLeft size={14} />
+              </button>
+              <span className="text-xs text-[var(--text-secondary)] font-mono">
+                {page} / {totalPages}
+              </span>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages}
+                className="btn-outline text-xs py-1.5 px-3 disabled:opacity-30"
+              >
+                <ChevronRight size={14} />
+              </button>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
