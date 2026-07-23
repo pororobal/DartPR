@@ -51,7 +51,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section className="py-20 px-4 max-w-6xl mx-auto">
+      <section className="py-20 px-4 max-w-5xl mx-auto">
         <h2 className="text-2xl font-bold text-center text-white mb-12">
           DART0s가 해결합니다
         </h2>
@@ -68,7 +68,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section className="py-20 px-4" id="pricing">
+      <section className="py-20 px-4 max-w-5xl mx-auto" id="pricing">
         <h2 className="text-2xl font-bold text-center text-white mb-4">
           플랜
         </h2>
