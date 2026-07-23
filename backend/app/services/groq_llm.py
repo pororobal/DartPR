@@ -5,14 +5,16 @@ Calls Groq API with the B-2 system prompt, parses structured JSON output.
 LLM does NOT compute scores — only classifies category + extracts flags.
 """
 
+import asyncio
 import json
 import logging
-from typing import Optional, List, Any
+from typing import Optional, List
 from pydantic import BaseModel, Field
 
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+_groq_semaphore = asyncio.Semaphore(1)
 
 # ---------------------------------------------------------------------------
 # B-2 System Prompt (verbatim from spec)
@@ -95,11 +97,11 @@ class GroqOutput(BaseModel):
     company_name: str
     title: str
     category: str
-    sub_rule_flags: SubRuleFlags
+    sub_rule_flags: SubRuleFlags = Field(default_factory=SubRuleFlags)
     deceptive_pattern_detected: bool = False
     momentum_authenticity: str = "MEDIUM"  # HIGH | MEDIUM | LOW
     llm_summary: str = ""
-    key_metrics: List[KeyMetricItem] = []
+    key_metrics: List[KeyMetricItem] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -113,7 +115,8 @@ def _safe_fallback(error_msg: str) -> GroqOutput:
         ticker="",
         company_name="",
         title="",
-        category="",
+        category="EARNINGS",
+        sub_rule_flags=SubRuleFlags(),
         deceptive_pattern_detected=False,
         momentum_authenticity="MEDIUM",
         llm_summary="LLM 분석 실패",
@@ -150,19 +153,20 @@ async def analyze_disclosure(
 공시제목: {title}
 
 공시 원문:
-{raw_text[:8000]}  # Truncate to avoid token limits
+{raw_text[:3500]}  # Truncate to avoid token limits
 """
 
-        response = await client.chat.completions.create(
-            model=settings.groq_model,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_message},
-            ],
-            temperature=0.1,
-            max_tokens=1024,
-            response_format={"type": "json_object"},
-        )
+        async with _groq_semaphore:
+            response = await client.chat.completions.create(
+                model=settings.groq_model,
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": user_message},
+                ],
+                temperature=0.1,
+                max_tokens=700,
+                response_format={"type": "json_object"},
+            )
 
         content = response.choices[0].message.content
         if not content:
