@@ -192,11 +192,7 @@ async def reclassify_disclosures():
     for row in rows:
         title = row.get("title", "")
         raw_text = row.get("raw_text", "")
-        old_cat = row.get("category")
         new_cat, sub_rule_flags = _guess_category(title, raw_text)
-
-        if old_cat == new_cat and row.get("sub_rule_id") != "bio_ind_approval":
-            continue
 
         score_result = compute_score(new_cat, sub_rule_flags)
         supabase.table("disclosures").update({
