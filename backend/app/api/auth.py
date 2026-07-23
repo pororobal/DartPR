@@ -72,7 +72,7 @@ async def get_current_user(
     }
 
 
-async def require_plan(min_plan: str = "pro"):
+def require_plan(min_plan: str = "pro"):
     """
     Dependency factory: require user to have at least a certain plan.
     Usage: `Depends(require_plan("pro"))`
