@@ -165,3 +165,49 @@ async def trigger_poll(user: dict = Depends(require_plan("pro"))):
     from app.services.dart_poller import poll_dart_once
     await poll_dart_once()
     return {"message": "Poll cycle triggered"}
+
+
+# ---------------------------------------------------------------------------
+# Re-classify existing disclosures (fix BIOTECH over-classification)
+# ---------------------------------------------------------------------------
+
+@router.post("/reclassify")
+async def reclassify_disclosures(user: dict = Depends(require_plan("pro"))):
+    """
+    Re-run _guess_category + compute_score on all existing disclosures
+    that still have the old BIOTECH/bio_ind_approval classification.
+    Fixes data inserted before the keyword-priority fix.
+    """
+    from app.services.dart_poller import _guess_category
+    from app.services.rules_engine import compute_score
+
+    supabase = get_supabase()
+    result = (
+        supabase.table("disclosures")
+        .select("id,dart_rcept_no,title,raw_text,category,sub_rule_id")
+        .execute()
+    )
+    rows = result.data or []
+    updated = 0
+
+    for row in rows:
+        title = row.get("title", "")
+        raw_text = row.get("raw_text", "")
+        old_cat = row.get("category")
+        new_cat = _guess_category(title, raw_text)
+
+        if old_cat == new_cat and row.get("sub_rule_id") != "bio_ind_approval":
+            continue  # skip if unchanged and not the old default sub-rule
+
+        score_result = compute_score(new_cat, {})
+        supabase.table("disclosures").update({
+            "category": new_cat,
+            "sub_rule_id": score_result.sub_rule_id,
+            "dvi_score": score_result.dvi_score,
+            "impact_level": score_result.impact_level,
+            "risk_flag": score_result.risk_flag,
+            "is_feed_visible": score_result.is_feed_visible or score_result.risk_flag == "HIGH_RISK_TRAP",
+        }).eq("id", row["id"]).execute()
+        updated += 1
+
+    return {"message": f"Re-classified {updated} disclosures"}

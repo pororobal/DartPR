@@ -155,7 +155,7 @@ async def _process_disclosure(item: dict):
     rcept_no = item.get("rcept_no", "")
     ticker = item.get("corp_code", "")  # OpenDART uses corp_code
     corp_name = item.get("corp_name", "")
-    title = item.get("report_nm", "")
+    title = item.get("report_nm", "").strip()
     rcept_dt = item.get("rcept_dt", "")
 
     # Parse date

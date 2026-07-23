@@ -127,7 +127,7 @@ export default function LivePage() {
       <div className="max-w-3xl mx-auto px-4 py-8 text-center">
         <AlertCircle size={48} className="text-[var(--accent-red)] mx-auto mb-4" />
         <p className="text-[var(--accent-red)]">{error}</p>
-        <button onClick={loadData} className="btn-outline mt-4">
+        <button onClick={() => loadData()} className="btn-outline mt-4">
           재시도
         </button>
       </div>

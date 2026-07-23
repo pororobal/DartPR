@@ -32,11 +32,17 @@ html {
 
 body {
   font-family: 'Pretendard', 'JetBrains Mono', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-variant-numeric: tabular-nums;
   background-color: var(--bg-primary);
   color: var(--text-primary);
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "tnum";
+}
+
+h1, h2, h3, h4 {
+  text-wrap: balance;
 }
 
 ::-webkit-scrollbar { width: 6px; }

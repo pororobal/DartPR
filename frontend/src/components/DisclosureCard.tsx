@@ -40,14 +40,17 @@ export default function DisclosureCard({ item }: DisclosureCardProps) {
   const isPending = item.llm_status === "PENDING";
   const isHighRisk = item.risk_flag === "HIGH_RISK_TRAP";
 
+  // Clean up title — strip leading brackets noise and extra whitespace
+  const cleanTitle = item.title?.replace(/\s+/g, " ").trim() || "";
+
   return (
-    <div className="card p-4 animate-in">
-      <div className="flex items-start justify-between gap-3">
+    <div className="card p-4 animate-in hover:border-[var(--text-muted)] transition-all duration-200">
+      <div className="flex items-start justify-between gap-4">
         {/* Left: content */}
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 space-y-1.5">
           {/* Top row: ticker + category + time */}
-          <div className="flex items-center gap-2 flex-wrap mb-1.5">
-            <span className="font-mono text-xs font-bold text-[var(--accent-blue)]">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-mono text-xs font-bold text-[var(--accent-blue)] tracking-tight">
               {item.ticker}
             </span>
             {item.category && (
@@ -59,41 +62,43 @@ export default function DisclosureCard({ item }: DisclosureCardProps) {
                 리스크
               </span>
             )}
-            <span className="flex items-center gap-1 text-[10px] text-[var(--text-muted)] ml-auto">
+            <span className="flex items-center gap-1 text-[10px] text-[var(--text-muted)] ml-auto whitespace-nowrap">
               <Clock size={10} />
               {formattedTime}
             </span>
           </div>
 
-          {/* Company name */}
-          <h3 className="text-sm font-semibold text-white truncate">
-            {item.company_name}
-          </h3>
-
-          {/* Title */}
-          <p className="text-xs text-[var(--text-secondary)] mt-0.5 line-clamp-2">
-            {item.title}
-          </p>
+          {/* Company name + Title */}
+          <div>
+            <h3 className="text-sm font-semibold text-white leading-snug">
+              {item.company_name}
+            </h3>
+            <p className="text-[13px] text-[var(--text-secondary)] mt-0.5 leading-snug line-clamp-2">
+              {cleanTitle}
+            </p>
+          </div>
 
           {/* LLM Summary — 2-stage loading */}
           {isPending ? (
-            <div className="mt-2 space-y-1.5">
+            <div className="space-y-1.5 pt-1">
               <div className="shimmer h-3 w-full" />
               <div className="shimmer h-3 w-3/4" />
             </div>
           ) : item.llm_summary ? (
-            <p className="text-xs text-[var(--text-secondary)] mt-2 italic border-l-2 border-[var(--accent-mint)] pl-2">
-              {item.llm_summary}
-            </p>
+            <div className="pt-1">
+              <p className="text-xs text-[var(--text-secondary)] leading-relaxed italic border-l-2 border-[var(--accent-mint)] pl-3">
+                {item.llm_summary}
+              </p>
+            </div>
           ) : null}
 
           {/* Key metrics */}
           {item.key_metrics && item.key_metrics.length > 0 && (
-            <div className="flex gap-3 mt-2 flex-wrap">
+            <div className="flex gap-2 flex-wrap pt-0.5">
               {item.key_metrics.map((m, i) => (
                 <span
                   key={i}
-                  className={`text-[10px] px-2 py-0.5 rounded-full ${
+                  className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
                     m.status === "POSITIVE"
                       ? "bg-green-900/20 text-green-400"
                       : m.status === "NEGATIVE"
@@ -109,7 +114,7 @@ export default function DisclosureCard({ item }: DisclosureCardProps) {
         </div>
 
         {/* Right: score badge */}
-        <div className="flex-shrink-0">
+        <div className="flex-shrink-0 pt-0.5">
           <ScoreBadge score={item.dvi_score} size="lg" />
         </div>
       </div>
