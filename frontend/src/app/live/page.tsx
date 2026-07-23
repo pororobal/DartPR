@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
-import { disclosures, DisclosureItem } from "@/lib/api";
+import { auth, disclosures, DisclosureItem } from "@/lib/api";
 import DisclosureCard from "@/components/DisclosureCard";
 import { RefreshCw, AlertCircle } from "lucide-react";
 
