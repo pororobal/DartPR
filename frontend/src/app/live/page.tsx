@@ -32,19 +32,15 @@ export default function LivePage() {
       setIsFreeTier(!hasSession);
 
       if (hasSession) {
-        // Check plan
-        const res = await fetch("/api/v1/auth/me", {
-          headers: {
-            Authorization: `Bearer ${session.session!.access_token}`,
-          },
-        });
-        if (res.ok) {
-          const user = await res.json();
+        try {
+          const user = await auth.me();
           if (user.plan === "free") {
             setIsFreeTier(true);
           } else {
             setIsLive(true);
           }
+        } catch {
+          setIsFreeTier(true);
         }
       }
 

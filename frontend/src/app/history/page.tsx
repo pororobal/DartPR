@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { supabase } from "@/lib/supabase";
 import { disclosures, DisclosureItem } from "@/lib/api";
 import DisclosureCard from "@/components/DisclosureCard";
 import { Search, ChevronLeft, ChevronRight, AlertCircle } from "lucide-react";
@@ -34,24 +33,13 @@ export default function HistoryPage() {
     setLoading(true);
     setError(null);
     try {
-      const { data: session } = await supabase.auth.getSession();
-      const token = session?.session?.access_token;
-
       const params: Record<string, string | number> = { page, per_page: perPage };
       if (ticker) params.ticker = ticker;
       if (category) params.category = category;
       if (scoreMin) params.dvi_score_min = Number(scoreMin);
       if (scoreMax) params.dvi_score_max = Number(scoreMax);
 
-      const search = new URLSearchParams();
-      Object.entries(params).forEach(([k, v]) => search.set(k, String(v)));
-
-      const headers: Record<string, string> = {};
-      if (token) headers["Authorization"] = `Bearer ${token}`;
-
-      const res = await fetch(`/api/v1/disclosures/history?${search}`, { headers });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const result = await res.json();
+      const result = await disclosures.history(params);
       setItems(result.data || []);
       setTotal(result.total || 0);
     } catch (e) {
