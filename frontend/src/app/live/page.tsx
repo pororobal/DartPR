@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
-import { auth, disclosures, DisclosureItem } from "@/lib/api";
+import { disclosures, DisclosureItem } from "@/lib/api";
 import DisclosureCard from "@/components/DisclosureCard";
 import { RefreshCw, AlertCircle } from "lucide-react";
 
@@ -10,9 +10,6 @@ export default function LivePage() {
   const [items, setItems] = useState<DisclosureItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isFreeTier, setIsFreeTier] = useState(false);
-  const [isLive, setIsLive] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
 
   // Keep Render backend alive (ping every 4 min to prevent sleep)
   useEffect(() => {
@@ -25,34 +22,11 @@ export default function LivePage() {
   }, []);
 
   // Load initial data
-  const loadData = useCallback(async (forceFree?: boolean) => {
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     try {
-      const { data: session } = await supabase.auth.getSession();
-      const hasSession = !!session?.session;
-
-      if (hasSession && !forceFree) {
-        try {
-          const user = await auth.me();
-          if (user.plan === "free") {
-            setIsFreeTier(true);
-            setIsLive(false);
-          } else {
-            setIsFreeTier(false);
-            setIsLive(true);
-          }
-        } catch {
-          setIsFreeTier(true);
-          setIsLive(false);
-        }
-      } else {
-        setIsFreeTier(true);
-        setIsLive(false);
-      }
-
-      // Fetch initial data
-      const isFree = !hasSession || forceFree || isFreeTier;
-      const endpoint = hasSession && !isFree ? disclosures.live : disclosures.delayed;
-      const result = await endpoint();
+      const result = await disclosures.list();
       setItems(result.data);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load data");
@@ -63,7 +37,7 @@ export default function LivePage() {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   // Supabase Realtime subscription
   useEffect(() => {
@@ -75,12 +49,10 @@ export default function LivePage() {
           event: "INSERT",
           schema: "public",
           table: "disclosures",
-          filter: "is_feed_visible=eq.true",
         },
         (payload) => {
           const newItem = payload.new as DisclosureItem;
           setItems((prev) => [newItem, ...prev].slice(0, 100));
-          // Scroll to top on new item
           window.scrollTo({ top: 0, behavior: "smooth" });
         }
       )
@@ -90,12 +62,13 @@ export default function LivePage() {
           event: "UPDATE",
           schema: "public",
           table: "disclosures",
-          filter: "is_feed_visible=eq.true",
         },
         (payload) => {
           const updated = payload.new as DisclosureItem;
           setItems((prev) =>
-            prev.map((item) => (item.dart_rcept_no === updated.dart_rcept_no ? updated : item))
+            prev.map((item) =>
+              item.dart_rcept_no === updated.dart_rcept_no ? updated : item
+            )
           );
         }
       )
@@ -135,13 +108,13 @@ export default function LivePage() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-6" ref={containerRef}>
+    <div className="max-w-3xl mx-auto px-4 py-6">
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
         <div>
           <h1 className="text-2xl font-bold text-white">실시간 피드</h1>
           <p className="text-sm text-[var(--text-secondary)] mt-1">
-            총 {items.length}개 공시 · {isFreeTier ? "3분 지연" : "실시간"}
+            총 {items.length}개 공시
           </p>
         </div>
         <button
@@ -155,29 +128,6 @@ export default function LivePage() {
           새로고침
         </button>
       </div>
-
-      {/* Free tier banner */}
-      {isFreeTier && (
-        <div className="bg-yellow-900/20 border border-yellow-800/40 rounded-lg p-4 mb-5 flex items-center gap-3">
-          <AlertCircle size={16} className="text-yellow-500 flex-shrink-0" />
-          <p className="text-sm text-yellow-400">
-            Free 플랜은 3분 지연됩니다.{" "}
-            <a href="/pricing" className="underline font-medium">
-              업그레이드하기
-            </a>
-          </p>
-        </div>
-      )}
-
-      {/* Live indicator */}
-      {isLive && (
-        <div className="flex items-center gap-2 mb-4">
-          <span className="w-2 h-2 rounded-full bg-[var(--accent-mint)] animate-pulse" />
-          <span className="text-xs text-[var(--accent-mint)] font-bold uppercase tracking-widest">
-            LIVE
-          </span>
-        </div>
-      )}
 
       {/* Feed */}
       <div className="space-y-3">

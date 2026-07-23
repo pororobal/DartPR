@@ -26,8 +26,6 @@ export default function HistoryPage() {
   // Filters
   const [ticker, setTicker] = useState("");
   const [category, setCategory] = useState("");
-  const [scoreMin, setScoreMin] = useState("");
-  const [scoreMax, setScoreMax] = useState("");
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -36,8 +34,6 @@ export default function HistoryPage() {
       const params: Record<string, string | number> = { page, per_page: perPage };
       if (ticker) params.ticker = ticker;
       if (category) params.category = category;
-      if (scoreMin) params.dvi_score_min = Number(scoreMin);
-      if (scoreMax) params.dvi_score_max = Number(scoreMax);
 
       const result = await disclosures.history(params);
       setItems(result.data || []);
@@ -47,7 +43,7 @@ export default function HistoryPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, ticker, category, scoreMin, scoreMax]);
+  }, [page, ticker, category]);
 
   useEffect(() => {
     fetchData();
@@ -67,9 +63,11 @@ export default function HistoryPage() {
 
       {/* Search form */}
       <form onSubmit={handleSearch} className="card p-5 mb-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="text-xs text-[var(--text-muted)] font-bold uppercase tracking-wider">종목</label>
+            <label className="text-xs text-[var(--text-muted)] font-bold uppercase tracking-wider">
+              종목
+            </label>
             <input
               type="text"
               value={ticker}
@@ -79,43 +77,26 @@ export default function HistoryPage() {
             />
           </div>
           <div>
-            <label className="text-xs text-[var(--text-muted)] font-bold uppercase tracking-wider">카테고리</label>
+            <label className="text-xs text-[var(--text-muted)] font-bold uppercase tracking-wider">
+              카테고리
+            </label>
             <select
               value={category}
               onChange={(e) => setCategory(e.target.value)}
               className="w-full mt-1.5 bg-[var(--bg-hover)] border border-[var(--border-color)] rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-[var(--accent-mint)]"
             >
               {categories.map((c) => (
-                <option key={c.value} value={c.value}>{c.label}</option>
+                <option key={c.value} value={c.value}>
+                  {c.label}
+                </option>
               ))}
             </select>
           </div>
-          <div>
-            <label className="text-xs text-[var(--text-muted)] font-bold uppercase tracking-wider">최소 점수</label>
-            <input
-              type="number"
-              value={scoreMin}
-              onChange={(e) => setScoreMin(e.target.value)}
-              placeholder="0"
-              min="0"
-              max="100"
-              className="w-full mt-1.5 bg-[var(--bg-hover)] border border-[var(--border-color)] rounded px-3 py-2 text-sm text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-mint)]"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-[var(--text-muted)] font-bold uppercase tracking-wider">최대 점수</label>
-            <input
-              type="number"
-              value={scoreMax}
-              onChange={(e) => setScoreMax(e.target.value)}
-              placeholder="100"
-              min="0"
-              max="100"
-              className="w-full mt-1.5 bg-[var(--bg-hover)] border border-[var(--border-color)] rounded px-3 py-2 text-sm text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-mint)]"
-            />
-          </div>
         </div>
-        <button type="submit" className="btn-primary mt-4 text-sm py-2 px-5 flex items-center gap-1.5">
+        <button
+          type="submit"
+          className="btn-primary mt-4 text-sm py-2 px-5 flex items-center gap-1.5"
+        >
           <Search size={14} />
           검색
         </button>
@@ -136,12 +117,14 @@ export default function HistoryPage() {
         <div className="text-center py-8">
           <AlertCircle size={32} className="text-[var(--accent-red)] mx-auto mb-2" />
           <p className="text-sm text-[var(--accent-red)]">{error}</p>
-          <button onClick={fetchData} className="btn-outline mt-3 text-sm py-2 px-4">재시도</button>
+          <button onClick={fetchData} className="btn-outline mt-3 text-sm py-2 px-4">
+            재시도
+          </button>
         </div>
       ) : (
         <>
           <p className="text-sm text-[var(--text-secondary)] mb-3">
-            총 {total}건 · 페이지 {page}/{totalPages}
+            총 {total}건 &middot; 페이지 {page}/{totalPages}
           </p>
           <div className="space-y-3">
             {items.map((item) => (

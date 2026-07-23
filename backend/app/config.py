@@ -28,10 +28,8 @@ class Settings(BaseSettings):
     jwt_secret: str = "change-me-in-production"
     jwt_algorithm: str = "HS256"
 
-    # Feed config
-    feed_visible_threshold: int = 70
+    # Polling
     poll_interval_seconds: int = 30
-    free_tier_delay_seconds: int = 180
 
     @property
     def cors_origin_list(self) -> List[str]:

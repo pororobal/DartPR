@@ -7,18 +7,18 @@ import PricingTable from "@/components/PricingTable";
 const features = [
   {
     icon: <BarChart3 size={24} />,
-    title: "공시가 올라오는 즉시 — DVI 0-100 점수화",
-    desc: "자금조달·바이오·실적 등 카테고리별 트레이더 경험치를 규칙엔진에 녹여 정량화했습니다.",
+    title: "실시간 DART 공시 — 카테고리로 바로 분류",
+    desc: "자금조달·바이오·실적·주주환원 등 카테고리별로 실시간 분류. 원하는 공시만 골라 보세요.",
   },
   {
     icon: <Brain size={24} />,
-    title: "AI가 곧바로 원문을 더 깊이 분석해 정리해드립니다",
+    title: "AI가 원문을 분석해 요약해드립니다",
     desc: "숫자 뒤에 숨은 맥락 — 진짜 호재인지, 트랩인지 — 를 AI가 문장으로 풀어드립니다.",
   },
   {
     icon: <History size={24} />,
-    title: "히스토리 조회로 분석된 공시를 한눈에",
-    desc: "지나간 공시도 점수와 분석 요약까지 그대로 다시 볼 수 있습니다.",
+    title: "히스토리 조회로 지난 공시도 한눈에",
+    desc: "카테고리와 종목코드로 원하는 공시를 검색하고 AI 분석 결과까지 함께 확인하세요.",
   },
 ];
 
@@ -39,7 +39,7 @@ export default function LandingPage() {
             <span className="text-white">DartPR</span>가 해결합니다.
           </p>
           <p className="text-base md:text-lg text-[var(--text-secondary)] mt-3 max-w-xl mx-auto">
-            점수화와 AI 분석으로, 공시가 뜨는 순간 바로 판단하세요.
+            AI 분석으로 공시가 뜨는 순간 바로 핵심을 파악하세요.
           </p>
           <div className="flex items-center justify-center gap-4 mt-8">
             <Link href="/live" className="btn-primary flex items-center gap-2">

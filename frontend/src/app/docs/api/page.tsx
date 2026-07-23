@@ -27,25 +27,22 @@ const codeBlock = (code: string) => {
 const endpoints = [
   {
     method: "GET",
-    path: "/api/v1/dev/disclosures/live",
+    path: "/api/v1/dev/disclosures/list",
     auth: "X-API-Key",
-    desc: "실시간 공시 피드를 조회합니다. Developer 플랜 전용.",
+    desc: "전체 공시 목록을 조회합니다. Developer 플랜 전용.",
     curl: `curl -H "X-API-Key: your_api_key_here" \\
-  https://your-api.com/api/v1/dev/disclosures/live`,
+  https://your-api.com/api/v1/dev/disclosures/list`,
     response: `{
   "data": [
     {
       "dart_rcept_no": "20240723000123",
+      "dart_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20240723000123",
       "ticker": "005930",
       "company_name": "삼성전자",
       "title": "시설자금 조달을 위한 CB 발행 결정",
-      "dvi_score": 49.5,
       "category": "CAPITAL_RAISING",
-      "risk_flag": "CAUTION",
-      "impact_level": "NORMAL",
       "llm_summary": "시설자금 목적이므로 긍정적...",
       "llm_status": "DONE",
-      "is_feed_visible": false,
       "key_metrics": [...]
     }
   ],
