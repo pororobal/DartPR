@@ -12,7 +12,7 @@ Background scheduler that:
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Optional
 
 import httpx
@@ -77,18 +77,18 @@ OPENDART_DOCUMENT_URL = "https://opendart.fss.or.kr/api/document.xml"
 
 async def _fetch_disclosure_list() -> list[dict]:
     """
-    Fetch 공시목록 from OpenDART API for yesterday through today.
+    Fetch 공시목록 from OpenDART API for today.
     Returns list of disclosure items.
     """
     today = datetime.now(timezone.utc)
-    yesterday = today - timedelta(days=1)
+    date_str = today.strftime("%Y%m%d")
 
     params = {
         "crtfc_key": settings.opendart_api_key,
         "page_no": 1,
         "page_count": 100,
-        "bgn_de": yesterday.strftime("%Y%m%d"),
-        "end_de": today.strftime("%Y%m%d"),
+        "bgn_de": date_str,
+        "end_de": date_str,
     }
 
     async with httpx.AsyncClient(timeout=30.0) as client:

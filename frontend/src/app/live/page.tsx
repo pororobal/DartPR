@@ -25,27 +25,33 @@ export default function LivePage() {
   }, []);
 
   // Load initial data
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (forceFree?: boolean) => {
     try {
       const { data: session } = await supabase.auth.getSession();
       const hasSession = !!session?.session;
-      setIsFreeTier(!hasSession);
 
-      if (hasSession) {
+      if (hasSession && !forceFree) {
         try {
           const user = await auth.me();
           if (user.plan === "free") {
             setIsFreeTier(true);
+            setIsLive(false);
           } else {
+            setIsFreeTier(false);
             setIsLive(true);
           }
         } catch {
           setIsFreeTier(true);
+          setIsLive(false);
         }
+      } else {
+        setIsFreeTier(true);
+        setIsLive(false);
       }
 
       // Fetch initial data
-      const endpoint = hasSession && !isFreeTier ? disclosures.live : disclosures.delayed;
+      const isFree = !hasSession || forceFree || isFreeTier;
+      const endpoint = hasSession && !isFree ? disclosures.live : disclosures.delayed;
       const result = await endpoint();
       setItems(result.data);
     } catch (e) {
@@ -53,7 +59,7 @@ export default function LivePage() {
     } finally {
       setLoading(false);
     }
-  }, [isFreeTier]);
+  }, []);
 
   useEffect(() => {
     loadData();

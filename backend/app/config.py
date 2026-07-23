@@ -30,7 +30,7 @@ class Settings(BaseSettings):
 
     # Feed config
     feed_visible_threshold: int = 70
-    poll_interval_seconds: int = 300
+    poll_interval_seconds: int = 30
     free_tier_delay_seconds: int = 180
 
     @property
