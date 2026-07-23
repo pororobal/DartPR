@@ -172,10 +172,10 @@ async def trigger_poll(user: dict = Depends(require_plan("pro"))):
 # ---------------------------------------------------------------------------
 
 @router.post("/reclassify")
-async def reclassify_disclosures(user: dict = Depends(require_plan("pro"))):
+async def reclassify_disclosures():
     """
     Re-run _guess_category + compute_score on all existing disclosures.
-    Fixes data inserted before the keyword-priority fix.
+    Uses the latest keyword + scoring logic.
     """
     from app.services.dart_poller import _guess_category
     from app.services.rules_engine import compute_score
@@ -196,7 +196,7 @@ async def reclassify_disclosures(user: dict = Depends(require_plan("pro"))):
         new_cat, sub_rule_flags = _guess_category(title, raw_text)
 
         if old_cat == new_cat and row.get("sub_rule_id") != "bio_ind_approval":
-            continue  # skip if unchanged and not the old default sub-rule
+            continue
 
         score_result = compute_score(new_cat, sub_rule_flags)
         supabase.table("disclosures").update({
