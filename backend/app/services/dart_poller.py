@@ -11,9 +11,14 @@ Background scheduler that:
 """
 
 import asyncio
+import json
 import logging
+import re
+import unicodedata
+import zipfile
+from io import BytesIO
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 
 import httpx
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -23,6 +28,47 @@ from app.services.supabase_client import get_supabase
 from app.services.rules_engine import check_hard_fail
 
 logger = logging.getLogger(__name__)
+
+_CONTROL_CHAR_RE = re.compile(r"[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]")
+_UNICODE_NULL_ESCAPE_RE = re.compile(r"\\u0000", re.IGNORECASE)
+_TAG_RE = re.compile(r"<[^>]+>")
+
+
+def _clean_text(value: object, limit: int = 50000) -> str:
+    """Normalize incoming text so Supabase/Postgres can store it safely."""
+    if value is None:
+        return ""
+
+    text = str(value)
+    text = unicodedata.normalize("NFC", text)
+    text = text.encode("utf-8", errors="replace").decode("utf-8")
+    text = _UNICODE_NULL_ESCAPE_RE.sub(" ", text)
+    text = _CONTROL_CHAR_RE.sub(" ", text)
+    text = text.replace("\u0000", " ")
+    return text[:limit]
+
+
+def _clean_payload(value: Any) -> Any:
+    if isinstance(value, str):
+        return _clean_text(value)
+    if isinstance(value, list):
+        return [_clean_payload(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _clean_payload(item) for key, item in value.items()}
+    return value
+
+
+def _decode_bytes(data: bytes) -> str:
+    for encoding in ("utf-8", "cp949", "euc-kr"):
+        try:
+            return data.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    return data.decode("utf-8", errors="replace")
+
+
+def _strip_markup(text: str) -> str:
+    return _TAG_RE.sub(" ", text)
 
 # ---------------------------------------------------------------------------
 # Scheduler
@@ -49,6 +95,8 @@ async def start_poller():
         seconds=settings.poll_interval_seconds,
         id="dart_poller",
         replace_existing=True,
+        coalesce=True,
+        max_instances=1,
         next_run_time=datetime.now(timezone.utc),
     )
     _scheduler.start()
@@ -76,7 +124,7 @@ OPENDART_DOCUMENT_URL = "https://opendart.fss.or.kr/api/document.xml"
 
 
 async def _fetch_disclosure_list() -> list[dict]:
-    today = datetime.now(timezone.utc)
+    today = datetime.now().astimezone()
     date_str = today.strftime("%Y%m%d")
 
     params = {
@@ -119,7 +167,25 @@ async def _fetch_document_text(rcept_no: str) -> Optional[str]:
         try:
             resp = await client.get(OPENDART_DOCUMENT_URL, params=params)
             resp.raise_for_status()
-            return resp.text
+            content = resp.content
+
+            if zipfile.is_zipfile(BytesIO(content)):
+                chunks: list[str] = []
+                with zipfile.ZipFile(BytesIO(content)) as archive:
+                    for name in archive.namelist():
+                        if name.endswith("/"):
+                            continue
+                        chunks.append(_decode_bytes(archive.read(name)))
+                return _strip_markup("\n".join(chunks))
+
+            if b"\x00" in content:
+                logger.warning(
+                    f"Document response contains binary nulls for {rcept_no}; "
+                    "using metadata fallback"
+                )
+                return None
+
+            return _strip_markup(_decode_bytes(content))
         except httpx.HTTPError as e:
             logger.warning(f"Document fetch failed for {rcept_no}: {e}")
             return None
@@ -137,8 +203,8 @@ async def _fetch_document_text(rcept_no: str) -> Optional[str]:
 async def _process_disclosure(item: dict):
     rcept_no = item.get("rcept_no", "")
     ticker = item.get("corp_code", "")
-    corp_name = item.get("corp_name", "")
-    title = item.get("report_nm", "").strip()
+    corp_name = _clean_text(item.get("corp_name", ""))
+    title = _clean_text(item.get("report_nm", "")).strip()
     rcept_dt = item.get("rcept_dt", "")
 
     try:
@@ -151,6 +217,7 @@ async def _process_disclosure(item: dict):
     raw_text = await _fetch_document_text(rcept_no)
     if raw_text is None:
         raw_text = f"{corp_name} - {title}"
+    raw_text = _clean_text(raw_text)
 
     if not rcept_no:
         logger.warning("Disclosure item missing rcept_no -- skipping")
@@ -174,19 +241,22 @@ async def _process_disclosure(item: dict):
     # 2. Keyword-based category guess (pre-LLM)
     category, sub_rule_flags = _guess_category(title, raw_text)
 
-    safe_raw_text = raw_text[:50000].encode("utf-8", errors="replace").decode("utf-8")
-    insert_data = {
+    insert_data = _clean_payload({
         "dart_rcept_no": rcept_no,
         "ticker": ticker,
         "company_name": corp_name,
         "title": title,
-        "raw_text": safe_raw_text,
+        "raw_text": raw_text,
         "published_at": published_at.isoformat(),
         "category": category,
         "deceptive_pattern_detected": True if hard_fail.detected else None,
         "momentum_authenticity": "LOW" if hard_fail.detected else None,
         "llm_status": "DONE" if skip_llm else "PENDING",
-    }
+    })
+
+    if "\\u0000" in json.dumps(insert_data, ensure_ascii=True):
+        logger.warning(f"Skipping disclosure {rcept_no}: payload still contains null escape")
+        return
 
     try:
         supabase.table("disclosures").insert(insert_data).execute()
@@ -222,15 +292,15 @@ async def _enrich_with_llm(
             raw_text=raw_text,
         )
 
-        update_data = {
+        update_data = _clean_payload({
             "category": llm_result.category,
             "deceptive_pattern_detected": llm_result.deceptive_pattern_detected,
             "momentum_authenticity": llm_result.momentum_authenticity,
-            "llm_summary": llm_result.llm_summary,
+            "llm_summary": _clean_text(llm_result.llm_summary, limit=8000),
             "key_metrics": [m.model_dump() for m in llm_result.key_metrics],
             "llm_raw_response": llm_result.model_dump(),
             "llm_status": "DONE",
-        }
+        })
 
         supabase = get_supabase()
         supabase.table("disclosures").update(update_data).eq(

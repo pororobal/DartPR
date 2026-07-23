@@ -84,7 +84,7 @@ async def dev_history(
     user: dict = Depends(verify_api_key),
 ):
     supabase = get_supabase()
-    query = supabase.table("disclosures").select("*", count="exact")
+    query = supabase.table("disclosures").select("id,dart_rcept_no,ticker,company_name,title,published_at,category,sub_rule_id,deceptive_pattern_detected,momentum_authenticity,llm_summary,key_metrics,llm_status,created_at", count="exact")
 
     if ticker:
         query = query.ilike("ticker", f"%{ticker}%")

@@ -32,6 +32,6 @@ services:
       - key: CORS_ORIGINS
         value: "*"
       - key: POLL_INTERVAL_SECONDS
-        value: "300"
+        value: "30"
       - key: FREE_TIER_DELAY_SECONDS
         value: "180"

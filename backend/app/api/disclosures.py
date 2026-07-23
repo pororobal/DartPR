@@ -48,7 +48,7 @@ async def get_disclosure_list():
     supabase = get_supabase()
     result = (
         supabase.table("disclosures")
-        .select("*")
+        .select("id,dart_rcept_no,ticker,company_name,title,published_at,category,sub_rule_id,deceptive_pattern_detected,momentum_authenticity,llm_summary,key_metrics,llm_status,created_at")
         .order("published_at", desc=True)
         .limit(50)
         .execute()
@@ -78,7 +78,7 @@ async def get_history(
     Search disclosure history with optional ticker/category filters.
     """
     supabase = get_supabase()
-    query = supabase.table("disclosures").select("*", count="exact")
+    query = supabase.table("disclosures").select("id,dart_rcept_no,ticker,company_name,title,published_at,category,sub_rule_id,deceptive_pattern_detected,momentum_authenticity,llm_summary,key_metrics,llm_status,created_at", count="exact")
 
     if ticker:
         query = query.ilike("ticker", f"%{ticker}%")
