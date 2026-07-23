@@ -43,19 +43,19 @@ export default function Navbar() {
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
-          <Link href="/" className="text-xl font-bold tracking-tight">
-            <span className="text-[var(--accent-mint)]">DART</span>
-            <span className="text-white">0s</span>
+          <Link href="/" className="text-lg md:text-xl font-bold tracking-tight">
+            <span className="text-[var(--accent-mint)]">Dart</span>
+            <span className="text-white">PR</span>
           </Link>
 
-          <div className="hidden md:flex items-center gap-6">
-            <Link href="/live" className="text-sm text-[var(--text-secondary)] hover:text-white transition-colors">
+          <div className="hidden md:flex items-center gap-8">
+            <Link href="/live" className="text-sm font-medium text-[var(--text-secondary)] hover:text-white transition-colors">
               실시간 피드
             </Link>
-            <Link href="/history" className="text-sm text-[var(--text-secondary)] hover:text-white transition-colors">
+            <Link href="/history" className="text-sm font-medium text-[var(--text-secondary)] hover:text-white transition-colors">
               히스토리
             </Link>
-            <Link href="/pricing" className="text-sm text-[var(--text-secondary)] hover:text-white transition-colors">
+            <Link href="/pricing" className="text-sm font-medium text-[var(--text-secondary)] hover:text-white transition-colors">
               플랜
             </Link>
 

@@ -6,7 +6,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from app.services.supabase_client import get_supabase
 from app.schemas.disclosure import DisclosureResponse, DisclosureListResponse
-from app.api.auth import get_current_user, require_plan
+from app.api.auth import get_current_user, optional_get_current_user, require_plan
 from app.config import settings
 
 router = APIRouter(tags=["disclosures"])
@@ -112,7 +112,7 @@ async def get_history(
     dvi_score_max: Optional[float] = Query(None),
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
-    user: Optional[dict] = Depends(get_current_user),
+    user: Optional[dict] = Depends(optional_get_current_user),
 ):
     """
     Search disclosure history with filters.

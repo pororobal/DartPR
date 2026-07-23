@@ -88,7 +88,38 @@ def require_plan(min_plan: str = "pro"):
     return _check
 
 
-# ---------------------------------------------------------------------------
+async def optional_get_current_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+) -> dict | None:
+    """
+    Like get_current_user but returns None instead of 401 when unauthenticated.
+    Use for endpoints that work for both guest and logged-in users.
+    """
+    if credentials is None:
+        return None
+    token = credentials.credentials
+    try:
+        supabase = get_public_client()
+        user_resp = supabase.auth.get_user(token)
+        auth_user = user_resp.user
+        if not auth_user:
+            return None
+        svc = get_supabase()
+        user_row = (
+            svc.table("users")
+            .select("*")
+            .eq("email", auth_user.email)
+            .maybe_single()
+            .execute()
+        )
+        return {
+            "id": auth_user.id,
+            "email": auth_user.email,
+            "plan": user_row.data.get("plan", "free") if user_row.data else "free",
+            "api_key": user_row.data.get("api_key") if user_row.data else None,
+        }
+    except Exception:
+        return None
 # Endpoints
 # ---------------------------------------------------------------------------
 
