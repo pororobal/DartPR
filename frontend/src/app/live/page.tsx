@@ -14,6 +14,16 @@ export default function LivePage() {
   const [isLive, setIsLive] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Keep Render backend alive (ping every 4 min to prevent sleep)
+  useEffect(() => {
+    const ping = () => {
+      fetch(`${process.env.NEXT_PUBLIC_API_URL}/health`).catch(() => {});
+    };
+    ping();
+    const interval = setInterval(ping, 4 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Load initial data
   const loadData = useCallback(async () => {
     try {
