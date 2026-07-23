@@ -293,9 +293,6 @@ async def _enrich_with_llm(
         )
 
         update_data = _clean_payload({
-            "category": llm_result.category,
-            "deceptive_pattern_detected": llm_result.deceptive_pattern_detected,
-            "momentum_authenticity": llm_result.momentum_authenticity,
             "llm_summary": _clean_text(llm_result.llm_summary, limit=8000),
             "key_metrics": [m.model_dump() for m in llm_result.key_metrics],
             "llm_raw_response": llm_result.model_dump(),
@@ -309,7 +306,7 @@ async def _enrich_with_llm(
 
         logger.info(
             f"LLM enrichment done for {rcept_no}: "
-            f"category={llm_result.category}"
+            f"summary_len={len(llm_result.llm_summary)}"
         )
 
     except Exception as e:

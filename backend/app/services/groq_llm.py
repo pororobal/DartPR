@@ -1,14 +1,15 @@
 """
-Groq LLM service for DART0s.
+Groq LLM service for DartPR.
 
-Calls Groq API with the B-2 system prompt, parses structured JSON output.
-LLM does NOT compute scores — only classifies category + extracts flags.
+The LLM only summarizes DART disclosure facts and extracts metrics. It does
+not compute scores or imply investment judgment.
 """
 
 import asyncio
 import json
 import logging
-from typing import Optional, List
+from typing import List, Optional
+
 from pydantic import BaseModel, Field
 
 from app.config import settings
@@ -16,69 +17,93 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 _groq_semaphore = asyncio.Semaphore(1)
 
-# ---------------------------------------------------------------------------
-# B-2 System Prompt (verbatim from spec)
-# ---------------------------------------------------------------------------
 
-SYSTEM_PROMPT = """당신은 30년 경력의 대한민국 주식시장 트레이더이며, DART 공시 원문을 즉시 해석하는 역할을 맡고 있습니다.
+SYSTEM_PROMPT = """당신은 DART 공시 원문을 분석하는 증권가 수석 애널리스트 공시 분석가입니다.
 
-당신의 임무는 딱 두 가지입니다:
-1. 이 공시를 아래 6개 대분류 중 하나로 분류하고, 세부 판별에 필요한 정성적 사실관계(flag)를 원문에서 추출한다.
-2. 이 공시가 투자자를 속이려는 트랩(예: 배정대상 실체 불분명, 비정상적으로 긴 납입일정, 계약상대방 비공개 등)인지, 아니면 진짜 모멘텀인지 트레이더 관점에서 근거를 들어 서술한다.
+당신이 할 일은 딱 한 가지입니다:
+공시 원문을 분석해서 핵심 내용을 객관적으로 요약한다.
 
-절대로 점수를 직접 계산하지 마십시오. 당신은 category와 flag 값만 정확히 추출하면 됩니다.
+절대 금지사항:
+- 투자 판단을 암시하는 표현을 사용하지 않는다.
+- 호재, 악재, 매수, 매도, 주가 영향, 기대, 우려, 모멘텀, 재료 같은 표현을 사용하지 않는다.
+- 공시 원문에 없는 정보(과거 주가 흐름, 시장 컨센서스, 향후 전망)를 추측해서 서술하지 않는다.
+- 점수, 등급, 가중치, 투자 매력도, 리스크 점수를 계산하지 않는다.
 
-대분류:
-- CAPITAL_RAISING (자금조달: 유증/CB/BW)
-- BIOTECH (바이오/제약: 임상/허가/기술이전)
-- BUSINESS_CONTRACT (영업계약: 공급계약/무상증자)
-- EARNINGS (실적/재무: 흑자전환/어닝서프라이즈/적자)
-- SHAREHOLDER_RETURN (주주환원/지배구조: 자사주/최대주주변경)
-- DELISTING_RISK (상장유지 리스크: 감사의견/횡령배임/감자 - 해당 시 반드시 표시)
+아래는 공시에 자주 등장하는 유형 사전입니다. 점수화하지 말고, 원문 사실관계를 이해하기 위한 참고로만 사용하십시오.
 
-STRICT OUTPUT: 아래 JSON 스키마로만 응답하십시오. 마크다운, 설명 텍스트 절대 금지.
+1. 지배구조 및 경영권 분쟁
+- 경영권 분쟁 관련 소송 제기, 의결권행사금지 가처분
+- 최대주주 변경, 주식양수도, 최대주주 및 특수관계인 지분 처분
+- 임시주주총회 소집, 신규 사업목적 추가
+
+2. 자금조달 및 자본변동
+- 제3자배정 유상증자, 주주배정 후 실권주 일반공모
+- CB/BW/EB 발행, 전환사채, 신주인수권부사채, 교환사채
+- 무상증자, 유상감자, 무상감자, 자본금 변동
+
+3. 바이오/제약/헬스케어
+- 임상시험계획 신청 또는 승인, FDA/EMA/식약처 관련 사항
+- 임상 결과, 품목허가 신청, 기술이전 계약, 기술반환, 계약해지
+
+4. 영업활동 및 공급계약
+- 단일판매 공급계약, 수주, 판매계약, 공급계약 해지 또는 변경
+- 계약금액, 계약상대방, 계약기간, 최근 매출액 대비 비율
+
+5. 실적 및 재무보고
+- 매출액 또는 손익구조 변경, 잠정실적, 흑자전환, 적자전환
+- 감사보고서, 사업보고서, 반기보고서, 분기보고서
+
+6. 주주환원 정책
+- 자기주식 취득, 자기주식 처분, 자기주식 소각
+- 현금배당, 주식배당, 중간배당, 배당률
+
+7. 상장유지 및 법적 리스크
+- 감사의견 비적정, 횡령/배임, 상장폐지 사유, 관리종목, 투자주의환기종목
+- 회생절차, 법정관리, 불성실공시법인, 공시 번복 또는 철회
+
+8. 사채 발행 후 관리
+- 전환가액/행사가액 조정, 리픽싱
+- 전환청구권 행사, 신주인수권 행사, 만기 전 사채 취득 또는 소각
+
+9. 기업결합/M&A/구조조정
+- 타법인 주식 양수도, 회사합병, 분할, 물적분할, 신규시설투자
+- 사업시너지, 신규사업, 재무구조개선 등 원문 목적
+
+10. 지분공시 및 조회공시
+- 대량보유상황보고, 보유목적, 경영참여, 단순투자
+- 조회공시 답변, 중요정보 없음, 검토 중
+
+11. 해외증시/ADR/해외상장
+- 해외증권시장 상장 추진, ADR 발행, 해외 상장시장명
+
+12. 기타 공시 유형
+- 대표이사 변경, 임원 선임/해임, 특허권 취득, 계열회사 편입/제외
+- 자기주식 담보제공, 최대주주 지분 담보제공, 자본준비금 전입
+- 단순 정정신고서, 정정 사유
+
+STRICT OUTPUT: 아래 JSON 스키마로만 응답하십시오. 마크다운, 설명 텍스트, 코드블록은 절대 금지입니다.
 
 {
-  "ticker": "String (6자리 종목코드)",
-  "company_name": "String",
-  "title": "String (공시 제목)",
-  "category": "String (위 6개 대분류 중 하나)",
-  "sub_rule_flags": {
-    "third_party_target": "CONGLOMERATE | AFFILIATE | SHELL_OR_PE | null",
-    "payment_delay_days": "Number | null",
-    "cb_purpose": "FACILITY_OR_ACQUISITION | OPERATING_OR_DEBT | null",
-    "deal_amount_disclosed": "Boolean | null",
-    "counterparty_disclosed": "Boolean | null",
-    "revenue_ratio_estimate": "Number (percent) | null",
-    "major_holder_acquirer_type": "MAJOR_OR_FUND | NEW_ENTITY | null",
-    "delisting_hard_fail_detected": "Boolean"
-  },
-  "deceptive_pattern_detected": "Boolean",
-  "momentum_authenticity": "String ('HIGH' | 'MEDIUM' | 'LOW')",
-  "llm_summary": "String (2-3문장, 직설적인 트레이더 톤, 군더더기 없이)",
+  "llm_summary": "String (2-3문장, 원문 사실관계만 담담하게 서술, 투자판단 암시 금지)",
   "key_metrics": [
     {
-      "label": "String (예: '배정 대상', '납입 일정', '승인 기관')",
+      "label": "String (예: '배정 대상', '계약 금액', '납입 일정')",
       "value": "String",
-      "status": "String ('POSITIVE' | 'NEUTRAL' | 'NEGATIVE')"
+      "status": "POSITIVE | NEUTRAL | NEGATIVE"
     }
   ]
 }
 
-주의사항:
-- 원문에 명시되지 않은 정보는 절대 추측하지 말고 null로 표기하십시오.
-- delisting_hard_fail_detected가 true인 경우 다른 필드는 최소한으로 채우고 이 필드를 최우선으로 정확히 표시하십시오.
-- key_metrics는 최대 3개까지만 추출하십시오."""
+주의:
+- key_metrics는 원문에 실제로 기재된 정보만 최대 3개까지 추출하십시오.
+- status는 투자판단이 아니라 원문상 수치나 사건의 사실적 방향성만 표시합니다. 애매하면 NEUTRAL을 사용하십시오.
+- 원문에 없는 항목은 만들지 마십시오."""
 
-
-# ---------------------------------------------------------------------------
-# Output model
-# ---------------------------------------------------------------------------
 
 class KeyMetricItem(BaseModel):
     label: str
     value: str
-    status: str  # POSITIVE | NEUTRAL | NEGATIVE
+    status: str
 
 
 class SubRuleFlags(BaseModel):
@@ -93,40 +118,25 @@ class SubRuleFlags(BaseModel):
 
 
 class GroqOutput(BaseModel):
-    ticker: str
-    company_name: str
-    title: str
-    category: str
+    ticker: str = ""
+    company_name: str = ""
+    title: str = ""
+    category: Optional[str] = None
     sub_rule_flags: SubRuleFlags = Field(default_factory=SubRuleFlags)
     deceptive_pattern_detected: bool = False
-    momentum_authenticity: str = "MEDIUM"  # HIGH | MEDIUM | LOW
+    momentum_authenticity: str = "MEDIUM"
     llm_summary: str = ""
     key_metrics: List[KeyMetricItem] = Field(default_factory=list)
 
-
-# ---------------------------------------------------------------------------
-# Safe fallback
-# ---------------------------------------------------------------------------
 
 def _safe_fallback(error_msg: str) -> GroqOutput:
     """Return a minimal safe response when LLM call or parsing fails."""
     logger.warning(f"Groq LLM fallback triggered: {error_msg}")
     return GroqOutput(
-        ticker="",
-        company_name="",
-        title="",
-        category="EARNINGS",
-        sub_rule_flags=SubRuleFlags(),
-        deceptive_pattern_detected=False,
-        momentum_authenticity="MEDIUM",
         llm_summary="LLM 분석 실패",
         key_metrics=[],
     )
 
-
-# ---------------------------------------------------------------------------
-# Main API
-# ---------------------------------------------------------------------------
 
 async def analyze_disclosure(
     ticker: str,
@@ -135,12 +145,12 @@ async def analyze_disclosure(
     raw_text: str,
 ) -> GroqOutput:
     """
-    Call Groq API to analyze a disclosure.
+    Call Groq API to summarize a disclosure.
 
     Returns parsed GroqOutput. On any failure, returns safe fallback.
     """
     if not settings.groq_api_key:
-        logger.warning("GROQ_API_KEY not set — skipping LLM analysis")
+        logger.warning("GROQ_API_KEY not set -- skipping LLM analysis")
         return _safe_fallback("GROQ_API_KEY not configured")
 
     try:
@@ -153,7 +163,7 @@ async def analyze_disclosure(
 공시제목: {title}
 
 공시 원문:
-{raw_text[:3500]}  # Truncate to avoid token limits
+{raw_text[:3500]}
 """
 
         async with _groq_semaphore:
@@ -172,23 +182,16 @@ async def analyze_disclosure(
         if not content:
             return _safe_fallback("Empty LLM response")
 
-        # Parse JSON
-        data = json.loads(content)
-
-        # Validate with pydantic
-        result = GroqOutput(**data)
-
-        # Override ticker/company/title from known data
+        result = GroqOutput(**json.loads(content))
         result.ticker = ticker
         result.company_name = company_name
         result.title = title
-
         return result
 
     except json.JSONDecodeError as e:
         return _safe_fallback(f"JSON parse error: {e}")
     except ImportError:
-        logger.warning("groq package not installed — skipping LLM")
+        logger.warning("groq package not installed -- skipping LLM")
         return _safe_fallback("groq package not installed")
     except Exception as e:
         logger.error(f"Groq LLM call failed: {e}", exc_info=True)
