@@ -194,12 +194,12 @@ async def reclassify_disclosures(user: dict = Depends(require_plan("pro"))):
         title = row.get("title", "")
         raw_text = row.get("raw_text", "")
         old_cat = row.get("category")
-        new_cat = _guess_category(title, raw_text)
+        new_cat, sub_rule_flags = _guess_category(title, raw_text)
 
         if old_cat == new_cat and row.get("sub_rule_id") != "bio_ind_approval":
             continue  # skip if unchanged and not the old default sub-rule
 
-        score_result = compute_score(new_cat, {})
+        score_result = compute_score(new_cat, sub_rule_flags)
         supabase.table("disclosures").update({
             "category": new_cat,
             "sub_rule_id": score_result.sub_rule_id,

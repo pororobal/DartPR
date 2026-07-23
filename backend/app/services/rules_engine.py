@@ -90,41 +90,16 @@ CAPITAL_RAISING = CategoryRules(
     category="CAPITAL_RAISING",
     rules=[
         SubRule(
-            id="cr_conglomerate_thirdparty",
-            name="대기업/글로벌 빅테크 대상 3자배정 유증",
-            base=85, multiplier=1.25, score_cap=100,
-            llm_flag_required="third_party_target = CONGLOMERATE",
-        ),
-        SubRule(
-            id="cr_normal_thirdparty",
-            name="일반 3자배정 유증 (최대주주/관계사)",
-            base=60, multiplier=1.0,
-            llm_flag_required="third_party_target = AFFILIATE",
-        ),
-        SubRule(
-            id="cr_shell_company",
-            name="사모조합/페이퍼컴퍼니 3자배정 유증",
-            base=40, multiplier=0.4,
-            penalty_condition="payment_delay_days > 90",
-            penalty=20,
-            llm_flag_required="third_party_target = SHELL_OR_PE",
-        ),
-        SubRule(
             id="cr_rights_offering",
-            name="주주배정후 실권주 일반공모 유증",
+            name="주주배정 유증",
             base=20, multiplier=0.3,
+            llm_flag_required="cr_type = RIGHTS_OFFERING",
         ),
         SubRule(
-            id="cr_cb_bw_facility",
-            name="CB/BW 발행 - 시설자금/타법인증권 취득 목적",
-            base=55, multiplier=0.9,
-            llm_flag_required="cb_purpose = FACILITY_OR_ACQUISITION",
-        ),
-        SubRule(
-            id="cr_cb_bw_operating",
-            name="CB/BW 발행 - 운영자금/채무상환 목적",
-            base=35, multiplier=0.5,
-            llm_flag_required="cb_purpose = OPERATING_OR_DEBT",
+            id="cr_cb_bw_thirdparty",
+            name="CB/BW 발행 / 3자배정 유증",
+            base=40, multiplier=0.6,
+            llm_flag_required="cr_type = CB_BW_THIRDPARTY",
         ),
     ],
 )
@@ -135,25 +110,12 @@ BIOTECH = CategoryRules(
         SubRule(
             id="bio_ind_approval",
             name="해외 주요국(FDA/EMA) 임상 1/2상 IND 승인",
-            base=70, multiplier=1.35,
-        ),
-        SubRule(
-            id="bio_phase3_nda",
-            name="임상 3상 성공 / 품목허가(NDA) 신청",
-            base=70, multiplier=1.1,
-        ),
-        SubRule(
-            id="bio_clinical_hold",
-            name="임상 중지/보완 요구 (Clinical Hold)",
-            base=10, multiplier=0.1,
+            base=70, multiplier=1.0,
         ),
         SubRule(
             id="bio_license_out",
             name="기술이전(L/O) 계약",
             base=80, multiplier=1.2,
-            penalty_condition="deal_amount_disclosed = false",
-            penalty_override_score=60,
-            llm_flag_required="deal_amount_disclosed = BOOL",
         ),
     ],
 )
@@ -162,20 +124,16 @@ BUSINESS_CONTRACT = CategoryRules(
     category="BUSINESS_CONTRACT",
     rules=[
         SubRule(
-            id="bc_supply_contract_major",
-            name="단일판매·공급계약 - 매출대비 50%+ & 상대방 명시",
-            base=75, multiplier=1.2,
-            llm_flag_required="counterparty_disclosed = true AND revenue_ratio >= 50%",
-        ),
-        SubRule(
-            id="bc_supply_contract_minor",
-            name="단일판매·공급계약 - 상대방 비공개 또는 매출대비 10% 미만",
-            base=40, multiplier=0.6,
+            id="bc_supply_contract",
+            name="단일판매·공급계약",
+            base=60, multiplier=1.0,
+            llm_flag_required="bc_type = SUPPLY_CONTRACT",
         ),
         SubRule(
             id="bc_free_issue",
             name="무상증자",
             base=70, multiplier=1.1,
+            llm_flag_required="bc_type = FREE_ISSUE",
         ),
     ],
 )
@@ -184,19 +142,28 @@ EARNINGS = CategoryRules(
     category="EARNINGS",
     rules=[
         SubRule(
-            id="er_turnaround",
-            name="흑자전환",
+            id="er_negative",
+            name="적자전환/적자지속",
+            base=15, multiplier=1.0,
+            llm_flag_required="er_sign = NEGATIVE",
+        ),
+        SubRule(
+            id="er_regular_filing",
+            name="정기 보고서 (감사/사업/분기)",
+            base=35, multiplier=0.8,
+            llm_flag_required="er_sign = REGULAR_FILING",
+        ),
+        SubRule(
+            id="er_positive",
+            name="흑자전환/실적개선",
             base=65, multiplier=1.2,
+            llm_flag_required="er_sign = POSITIVE",
         ),
         SubRule(
-            id="er_surprise",
-            name="어닝 서프라이즈 (영업이익 컨센 대비 +30%↑)",
-            base=50, multiplier=0.8,
-        ),
-        SubRule(
-            id="er_loss_continued",
-            name="적자지속/적자전환",
-            base=25, multiplier=0.5,
+            id="er_turnaround",
+            name="기타 실적 공시",
+            base=45, multiplier=1.0,
+            llm_flag_required="er_sign = NEUTRAL",
         ),
     ],
 )
@@ -208,23 +175,25 @@ SHAREHOLDER_RETURN = CategoryRules(
             id="sr_buyback_retirement",
             name="자사주 매입 후 소각",
             base=75, multiplier=1.2,
+            llm_flag_required="sr_type = BUYBACK_RETIREMENT",
         ),
         SubRule(
             id="sr_buyback_only",
-            name="단순 자사주 취득 결정",
+            name="단순 자사주 취득/처분 결정",
+            base=55, multiplier=1.0,
+            llm_flag_required="sr_type = BUYBACK_ONLY",
+        ),
+        SubRule(
+            id="sr_major_holder_change",
+            name="최대주주 변경",
             base=60, multiplier=1.0,
+            llm_flag_required="sr_type = MAJOR_CHANGE",
         ),
         SubRule(
-            id="sr_major_holder_change_major",
-            name="최대주주 변경 - 인수주체 대기업/유명펀드",
-            base=70, multiplier=1.2,
-            llm_flag_required="major_holder_acquirer_type = MAJOR_OR_FUND",
-        ),
-        SubRule(
-            id="sr_major_holder_change_minor",
-            name="최대주주 변경 - 인수주체 신생조합/비상장사",
-            base=30, multiplier=0.5,
-            llm_flag_required="major_holder_acquirer_type = NEW_ENTITY",
+            id="sr_dividend",
+            name="배당/주주환원",
+            base=50, multiplier=0.9,
+            llm_flag_required="sr_type = DIVIDEND",
         ),
     ],
 )

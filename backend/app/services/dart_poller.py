@@ -191,20 +191,19 @@ async def _process_disclosure(item: dict):
     hard_fail = check_hard_fail(raw_text)
     skip_llm = hard_fail.detected
 
-    # 2. Compute score (without LLM — use dummy category for now;
-    #    LLM will update later if needed)
-    #    For the initial insert, we use a basic category mapping.
-    #    The LLM will later refine this.
-    category = _guess_category(title, raw_text)
-    score_result = compute_score(category, {})
+    # 2. Compute score without LLM for initial insert.
+    #    Use keyword-based category + flags for content-aware scoring.
+    category, sub_rule_flags = _guess_category(title, raw_text)
+    score_result = compute_score(category, sub_rule_flags)
 
-    # Build insert payload
+    # Build insert payload — sanitize raw_text for PostgreSQL safety
+    safe_raw_text = raw_text[:50000].encode("utf-8", errors="replace").decode("utf-8")
     insert_data = {
         "dart_rcept_no": rcept_no,
         "ticker": ticker,
         "company_name": corp_name,
         "title": title,
-        "raw_text": raw_text[:50000],  # truncate very long texts
+        "raw_text": safe_raw_text,
         "published_at": published_at.isoformat(),
         "category": category,
         "sub_rule_id": score_result.sub_rule_id,
@@ -302,42 +301,71 @@ async def _enrich_with_llm(
 # Category guesser (pre-LLM fallback)
 # ---------------------------------------------------------------------------
 
-def _guess_category(title: str, raw_text: str) -> str:
+def _guess_category(title: str, raw_text: str) -> tuple[str, dict]:
     """
     Keyword-based category guess using the disclosure title only.
+    Returns (category, sub_rule_flags) for more granular scoring.
     The report title (report_nm) is the most reliable signal for categorization.
-    LLM will refine this later.
     """
     t = title.upper()
 
-    # Delisting risk
-    if any(kw in t for kw in ["감사의견", "횡령", "배임", "감자", "상장폐지"]):
-        return "DELISTING_RISK"
+    # Delisting risk — highest priority
+    if any(kw in t for kw in ["감사의견", "횡령", "배임", "감자", "상장폐지",
+                               "관리종목지정우려", "상장적격성"]):
+        return ("DELISTING_RISK", {"risk_flag": "HIGH_RISK_TRAP"})
 
-    # Shareholder return — most specific keywords
-    if any(kw in t for kw in ["최대주주변경", "자사주취득", "자기주식취득", "자기주식처분",
-                               "주식소각", "배당", "주주환원"]):
-        return "SHAREHOLDER_RETURN"
+    # Shareholder return
+    if any(kw in t for kw in ["주식소각", "자기주식소각"]):
+        return ("SHAREHOLDER_RETURN", {"sr_type": "BUYBACK_RETIREMENT"})
+    if any(kw in t for kw in ["자사주취득", "자기주식취득"]):
+        return ("SHAREHOLDER_RETURN", {"sr_type": "BUYBACK_ONLY"})
+    if any(kw in t for kw in ["자기주식처분"]):
+        return ("SHAREHOLDER_RETURN", {"sr_type": "BUYBACK_ONLY"})
+    if any(kw in t for kw in ["최대주주변경"]):
+        return ("SHAREHOLDER_RETURN", {"sr_type": "MAJOR_CHANGE"})
+    if any(kw in t for kw in ["배당", "주주환원"]):
+        return ("SHAREHOLDER_RETURN", {"sr_type": "DIVIDEND"})
 
     # Capital raising
-    if any(kw in t for kw in ["유상증자", "CB 발행", "BW 발행", "전환사채", "전환청구권",
-                               "신주인수권", "주주배정", "3자배정"]):
-        return "CAPITAL_RAISING"
+    if any(kw in t for kw in ["유상증자", "주주배정"]):
+        return ("CAPITAL_RAISING", {"cr_type": "RIGHTS_OFFERING"})
+    if any(kw in t for kw in ["CB 발행", "BW 발행", "전환사채", "전환청구권",
+                               "신주인수권", "3자배정"]):
+        return ("CAPITAL_RAISING", {"cr_type": "CB_BW_THIRDPARTY"})
 
     # Business contract
-    if any(kw in t for kw in ["단일판매", "공급계약", "판매계약", "수주", "무상증자"]):
-        return "BUSINESS_CONTRACT"
+    if any(kw in t for kw in ["단일판매", "공급계약", "판매계약", "수주"]):
+        return ("BUSINESS_CONTRACT", {"bc_type": "SUPPLY_CONTRACT"})
+    if any(kw in t for kw in ["무상증자"]):
+        return ("BUSINESS_CONTRACT", {"bc_type": "FREE_ISSUE"})
 
-    # Earnings / financial reports
-    if any(kw in t for kw in ["실적", "영업이익", "매출액", "당기순이익", "흑자전환",
-                               "적자", "감사보고서", "사업보고서"]):
-        return "EARNINGS"
+    # Earnings — check sign first
+    if any(kw in t for kw in ["적자전환", "적자지속", "영업손실", "당기순손실"]):
+        return ("EARNINGS", {"er_sign": "NEGATIVE"})
+    if any(kw in t for kw in ["흑자전환", "영업이익", "매출액증가", "실적개선"]):
+        return ("EARNINGS", {"er_sign": "POSITIVE"})
+    if any(kw in t for kw in ["감사보고서", "사업보고서", "반기보고서", "분기보고서"]):
+        return ("EARNINGS", {"er_sign": "REGULAR_FILING"})
+    if any(kw in t for kw in ["실적", "매출액"]):
+        return ("EARNINGS", {"er_sign": "NEUTRAL"})
 
-    # Biotech — only from title keywords (no raw_text to avoid over-matching)
+    # Legal / litigation
+    if any(kw in t for kw in ["소송", "회생", "파산", "법정관리"]):
+        return ("DELISTING_RISK", {"risk_flag": "HIGH_RISK_TRAP"})
+
+    # M&A
+    if any(kw in t for kw in ["합병결정", "분할합병", "포괄적주식교환"]):
+        return ("EARNINGS", {"er_sign": "NEUTRAL", "event": "MERGER"})
+
+    # Major shareholder reporting
+    if any(kw in t for kw in ["대량보유", "주식등의대량보유"]):
+        return ("EARNINGS", {"er_sign": "NEUTRAL", "event": "MAJOR_HOLDING"})
+
+    # Biotech
     if any(kw in t for kw in ["임상", "FDA 승인", "품목허가", "신약", "기술이전"]):
-        return "BIOTECH"
+        return ("BIOTECH", {})
 
-    return "EARNINGS"
+    return ("EARNINGS", {"er_sign": "NEUTRAL"})
 
 
 # ---------------------------------------------------------------------------
