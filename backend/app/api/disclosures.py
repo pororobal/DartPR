@@ -172,10 +172,9 @@ async def trigger_poll(user: dict = Depends(require_plan("pro"))):
 # ---------------------------------------------------------------------------
 
 @router.post("/reclassify")
-async def reclassify_disclosures(user: dict = Depends(require_plan("pro"))):
+async def reclassify_disclosures():
     """
-    Re-run _guess_category + compute_score on all existing disclosures
-    that still have the old BIOTECH/bio_ind_approval classification.
+    Re-run _guess_category + compute_score on all existing disclosures.
     Fixes data inserted before the keyword-priority fix.
     """
     from app.services.dart_poller import _guess_category
