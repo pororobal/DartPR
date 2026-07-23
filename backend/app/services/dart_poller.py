@@ -304,52 +304,39 @@ async def _enrich_with_llm(
 
 def _guess_category(title: str, raw_text: str) -> str:
     """
-    Rough keyword-based category guess for initial insert.
-    Matches title first (most descriptive), falls back to raw_text.
+    Keyword-based category guess using the disclosure title only.
+    The report title (report_nm) is the most reliable signal for categorization.
     LLM will refine this later.
     """
-    title_upper = title.upper()
-    raw_upper = raw_text[:2000].upper() if raw_text else ""
+    t = title.upper()
 
-    def _match(keywords: list[str]) -> bool:
-        """Check title first, then raw_text."""
-        for kw in keywords:
-            if kw in title_upper:
-                return True
-        for kw in keywords:
-            if kw in raw_upper:
-                return True
-        return False
-
-    # Delisting risk — check title first (hard-fail covers raw_text anyway)
-    if _match(["감사의견", "횡령", "배임", "감자", "상장폐지"]):
+    # Delisting risk
+    if any(kw in t for kw in ["감사의견", "횡령", "배임", "감자", "상장폐지"]):
         return "DELISTING_RISK"
 
-    # Shareholder return — most specific, check early
-    if _match(["최대주주변경", "자사주취득", "자기주식취득", "자기주식처분",
-               "주식소각", "배당", "주주환원"]):
+    # Shareholder return — most specific keywords
+    if any(kw in t for kw in ["최대주주변경", "자사주취득", "자기주식취득", "자기주식처분",
+                               "주식소각", "배당", "주주환원"]):
         return "SHAREHOLDER_RETURN"
 
     # Capital raising
-    if _match(["유상증자", "CB 발행", "BW 발행", "전환사채", "전환청구권",
-               "신주인수권", "주주배정", "3자배정"]):
+    if any(kw in t for kw in ["유상증자", "CB 발행", "BW 발행", "전환사채", "전환청구권",
+                               "신주인수권", "주주배정", "3자배정"]):
         return "CAPITAL_RAISING"
 
     # Business contract
-    if _match(["단일판매", "공급계약", "판매계약", "수주", "무상증자"]):
+    if any(kw in t for kw in ["단일판매", "공급계약", "판매계약", "수주", "무상증자"]):
         return "BUSINESS_CONTRACT"
 
-    # Earnings
-    if _match(["실적", "영업이익", "매출액", "당기순이익", "흑자전환", "적자",
-               "감사보고서", "사업보고서"]):
+    # Earnings / financial reports
+    if any(kw in t for kw in ["실적", "영업이익", "매출액", "당기순이익", "흑자전환",
+                               "적자", "감사보고서", "사업보고서"]):
         return "EARNINGS"
 
-    # Biotech — check last to avoid over-matching (keywords are common in raw doc text)
-    if _match(["임상", "FDA 승인", "EMA", "IND 승인", "NDA 신청",
-               "기술이전", "품목허가", "신약"]):
+    # Biotech — only from title keywords (no raw_text to avoid over-matching)
+    if any(kw in t for kw in ["임상", "FDA 승인", "품목허가", "신약", "기술이전"]):
         return "BIOTECH"
 
-    # Default
     return "EARNINGS"
 
 
