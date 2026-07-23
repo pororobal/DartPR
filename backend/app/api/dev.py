@@ -3,7 +3,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Header, Query
+from fastapi import APIRouter, Depends, HTTPException, Header, Query
 from app.services.supabase_client import get_supabase
 from app.schemas.disclosure import DisclosureListResponse
 from app.config import settings
