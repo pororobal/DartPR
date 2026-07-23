@@ -62,28 +62,28 @@ export default function HistoryPage() {
   };
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-8">
-      <h1 className="text-xl font-bold text-white mb-6">히스토리</h1>
+    <div className="max-w-3xl mx-auto px-4 py-6">
+      <h1 className="text-2xl font-bold text-white mb-6">히스토리</h1>
 
       {/* Search form */}
-      <form onSubmit={handleSearch} className="card p-4 mb-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <form onSubmit={handleSearch} className="card p-5 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div>
-            <label className="text-[10px] text-[var(--text-muted)] font-bold uppercase tracking-wider">종목</label>
+            <label className="text-xs text-[var(--text-muted)] font-bold uppercase tracking-wider">종목</label>
             <input
               type="text"
               value={ticker}
               onChange={(e) => setTicker(e.target.value)}
               placeholder="종목코드"
-              className="w-full mt-1 bg-[var(--bg-hover)] border border-[var(--border-color)] rounded px-2.5 py-1.5 text-xs text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-mint)]"
+              className="w-full mt-1.5 bg-[var(--bg-hover)] border border-[var(--border-color)] rounded px-3 py-2 text-sm text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-mint)]"
             />
           </div>
           <div>
-            <label className="text-[10px] text-[var(--text-muted)] font-bold uppercase tracking-wider">카테고리</label>
+            <label className="text-xs text-[var(--text-muted)] font-bold uppercase tracking-wider">카테고리</label>
             <select
               value={category}
               onChange={(e) => setCategory(e.target.value)}
-              className="w-full mt-1 bg-[var(--bg-hover)] border border-[var(--border-color)] rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-[var(--accent-mint)]"
+              className="w-full mt-1.5 bg-[var(--bg-hover)] border border-[var(--border-color)] rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-[var(--accent-mint)]"
             >
               {categories.map((c) => (
                 <option key={c.value} value={c.value}>{c.label}</option>
@@ -91,7 +91,7 @@ export default function HistoryPage() {
             </select>
           </div>
           <div>
-            <label className="text-[10px] text-[var(--text-muted)] font-bold uppercase tracking-wider">최소 점수</label>
+            <label className="text-xs text-[var(--text-muted)] font-bold uppercase tracking-wider">최소 점수</label>
             <input
               type="number"
               value={scoreMin}
@@ -99,11 +99,11 @@ export default function HistoryPage() {
               placeholder="0"
               min="0"
               max="100"
-              className="w-full mt-1 bg-[var(--bg-hover)] border border-[var(--border-color)] rounded px-2.5 py-1.5 text-xs text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-mint)]"
+              className="w-full mt-1.5 bg-[var(--bg-hover)] border border-[var(--border-color)] rounded px-3 py-2 text-sm text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-mint)]"
             />
           </div>
           <div>
-            <label className="text-[10px] text-[var(--text-muted)] font-bold uppercase tracking-wider">최대 점수</label>
+            <label className="text-xs text-[var(--text-muted)] font-bold uppercase tracking-wider">최대 점수</label>
             <input
               type="number"
               value={scoreMax}
@@ -111,12 +111,12 @@ export default function HistoryPage() {
               placeholder="100"
               min="0"
               max="100"
-              className="w-full mt-1 bg-[var(--bg-hover)] border border-[var(--border-color)] rounded px-2.5 py-1.5 text-xs text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-mint)]"
+              className="w-full mt-1.5 bg-[var(--bg-hover)] border border-[var(--border-color)] rounded px-3 py-2 text-sm text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-mint)]"
             />
           </div>
         </div>
-        <button type="submit" className="btn-primary mt-3 text-xs py-1.5 px-4 flex items-center gap-1">
-          <Search size={12} />
+        <button type="submit" className="btn-primary mt-4 text-sm py-2 px-5 flex items-center gap-1.5">
+          <Search size={14} />
           검색
         </button>
       </form>
@@ -125,7 +125,7 @@ export default function HistoryPage() {
       {loading ? (
         <div className="space-y-3">
           {[...Array(3)].map((_, i) => (
-            <div key={i} className="card p-4">
+            <div key={i} className="card p-5">
               <div className="shimmer h-4 w-24 mb-2" />
               <div className="shimmer h-5 w-3/4 mb-1" />
               <div className="shimmer h-4 w-full" />
@@ -136,11 +136,11 @@ export default function HistoryPage() {
         <div className="text-center py-8">
           <AlertCircle size={32} className="text-[var(--accent-red)] mx-auto mb-2" />
           <p className="text-sm text-[var(--accent-red)]">{error}</p>
-          <button onClick={fetchData} className="btn-outline mt-3 text-xs py-1.5 px-3">재시도</button>
+          <button onClick={fetchData} className="btn-outline mt-3 text-sm py-2 px-4">재시도</button>
         </div>
       ) : (
         <>
-          <p className="text-xs text-[var(--text-secondary)] mb-3">
+          <p className="text-sm text-[var(--text-secondary)] mb-3">
             총 {total}건 · 페이지 {page}/{totalPages}
           </p>
           <div className="space-y-3">
@@ -155,19 +155,19 @@ export default function HistoryPage() {
               <button
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page <= 1}
-                className="btn-outline text-xs py-1.5 px-3 disabled:opacity-30"
+                className="btn-outline text-sm py-2 px-4 disabled:opacity-30"
               >
-                <ChevronLeft size={14} />
+                <ChevronLeft size={16} />
               </button>
-              <span className="text-xs text-[var(--text-secondary)] font-mono">
+              <span className="text-sm text-[var(--text-secondary)] font-mono">
                 {page} / {totalPages}
               </span>
               <button
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={page >= totalPages}
-                className="btn-outline text-xs py-1.5 px-3 disabled:opacity-30"
+                className="btn-outline text-sm py-2 px-4 disabled:opacity-30"
               >
-                <ChevronRight size={14} />
+                <ChevronRight size={16} />
               </button>
             </div>
           )}

@@ -108,10 +108,10 @@ export default function LivePage() {
 
   if (loading) {
     return (
-      <div className="max-w-3xl mx-auto px-4 py-8">
-        <div className="space-y-4">
+      <div className="max-w-3xl mx-auto px-4 py-6">
+        <div className="space-y-3">
           {[...Array(5)].map((_, i) => (
-            <div key={i} className="card p-4">
+            <div key={i} className="card p-5">
               <div className="shimmer h-4 w-24 mb-2" />
               <div className="shimmer h-5 w-3/4 mb-1" />
               <div className="shimmer h-4 w-full" />
@@ -124,7 +124,7 @@ export default function LivePage() {
 
   if (error) {
     return (
-      <div className="max-w-3xl mx-auto px-4 py-8 text-center">
+      <div className="max-w-3xl mx-auto px-4 py-6 text-center">
         <AlertCircle size={48} className="text-[var(--accent-red)] mx-auto mb-4" />
         <p className="text-[var(--accent-red)]">{error}</p>
         <button onClick={() => loadData()} className="btn-outline mt-4">
@@ -135,13 +135,13 @@ export default function LivePage() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-8" ref={containerRef}>
+    <div className="max-w-3xl mx-auto px-4 py-6" ref={containerRef}>
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-5">
         <div>
-          <h1 className="text-xl font-bold text-white">실시간 피드</h1>
-          <p className="text-xs text-[var(--text-secondary)] mt-1">
-            {items.length}개 공시 · {isFreeTier ? "3분 지연" : "실시간"}
+          <h1 className="text-2xl font-bold text-white">실시간 피드</h1>
+          <p className="text-sm text-[var(--text-secondary)] mt-1">
+            총 {items.length}개 공시 · {isFreeTier ? "3분 지연" : "실시간"}
           </p>
         </div>
         <button
@@ -149,20 +149,20 @@ export default function LivePage() {
             setLoading(true);
             loadData().then(() => setLoading(false));
           }}
-          className="btn-outline text-xs py-1.5 px-3 flex items-center gap-1"
+          className="btn-outline text-sm py-2 px-4 flex items-center gap-1.5"
         >
-          <RefreshCw size={12} />
+          <RefreshCw size={14} />
           새로고침
         </button>
       </div>
 
       {/* Free tier banner */}
       {isFreeTier && (
-        <div className="bg-yellow-900/20 border border-yellow-800/40 rounded-lg p-3 mb-4 flex items-center gap-2">
-          <AlertCircle size={14} className="text-yellow-500 flex-shrink-0" />
-          <p className="text-xs text-yellow-400">
+        <div className="bg-yellow-900/20 border border-yellow-800/40 rounded-lg p-4 mb-5 flex items-center gap-3">
+          <AlertCircle size={16} className="text-yellow-500 flex-shrink-0" />
+          <p className="text-sm text-yellow-400">
             Free 플랜은 3분 지연됩니다.{" "}
-            <a href="/pricing" className="underline">
+            <a href="/pricing" className="underline font-medium">
               업그레이드하기
             </a>
           </p>
@@ -173,7 +173,7 @@ export default function LivePage() {
       {isLive && (
         <div className="flex items-center gap-2 mb-4">
           <span className="w-2 h-2 rounded-full bg-[var(--accent-mint)] animate-pulse" />
-          <span className="text-[10px] text-[var(--accent-mint)] font-bold uppercase tracking-widest">
+          <span className="text-xs text-[var(--accent-mint)] font-bold uppercase tracking-widest">
             LIVE
           </span>
         </div>

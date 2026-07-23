@@ -44,13 +44,13 @@ export default function DisclosureCard({ item }: DisclosureCardProps) {
   const cleanTitle = item.title?.replace(/\s+/g, " ").trim() || "";
 
   return (
-    <div className="card p-4 animate-in hover:border-[var(--text-muted)] transition-all duration-200">
+    <div className="card p-5 animate-in hover:border-[var(--text-muted)] transition-all duration-200">
       <div className="flex items-start justify-between gap-4">
         {/* Left: content */}
-        <div className="flex-1 min-w-0 space-y-1.5">
+        <div className="flex-1 min-w-0 space-y-2">
           {/* Top row: ticker + category + time */}
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-mono text-xs font-bold text-[var(--accent-blue)] tracking-tight">
+            <span className="font-mono text-sm font-bold text-[var(--accent-blue)] tracking-tight">
               {item.ticker}
             </span>
             {item.category && (
@@ -58,22 +58,22 @@ export default function DisclosureCard({ item }: DisclosureCardProps) {
             )}
             {isHighRisk && (
               <span className="category-tag bg-red-900/40 text-red-400 flex items-center gap-1">
-                <AlertTriangle size={10} />
+                <AlertTriangle size={11} />
                 리스크
               </span>
             )}
-            <span className="flex items-center gap-1 text-[10px] text-[var(--text-muted)] ml-auto whitespace-nowrap">
-              <Clock size={10} />
+            <span className="flex items-center gap-1 text-xs text-[var(--text-muted)] ml-auto whitespace-nowrap">
+              <Clock size={12} />
               {formattedTime}
             </span>
           </div>
 
           {/* Company name + Title */}
           <div>
-            <h3 className="text-sm font-semibold text-white leading-snug">
+            <h3 className="text-base font-bold text-white leading-snug">
               {item.company_name}
             </h3>
-            <p className="text-[13px] text-[var(--text-secondary)] mt-0.5 leading-snug line-clamp-2">
+            <p className="text-sm text-[var(--text-secondary)] mt-0.5 leading-snug line-clamp-2">
               {cleanTitle}
             </p>
           </div>
@@ -81,12 +81,12 @@ export default function DisclosureCard({ item }: DisclosureCardProps) {
           {/* LLM Summary — 2-stage loading */}
           {isPending ? (
             <div className="space-y-1.5 pt-1">
-              <div className="shimmer h-3 w-full" />
-              <div className="shimmer h-3 w-3/4" />
+              <div className="shimmer h-3.5 w-full" />
+              <div className="shimmer h-3.5 w-3/4" />
             </div>
           ) : item.llm_summary ? (
             <div className="pt-1">
-              <p className="text-xs text-[var(--text-secondary)] leading-relaxed italic border-l-2 border-[var(--accent-mint)] pl-3">
+              <p className="text-sm text-[var(--text-secondary)] leading-relaxed italic border-l-2 border-[var(--accent-mint)] pl-3">
                 {item.llm_summary}
               </p>
             </div>
@@ -98,7 +98,7 @@ export default function DisclosureCard({ item }: DisclosureCardProps) {
               {item.key_metrics.map((m, i) => (
                 <span
                   key={i}
-                  className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                  className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                     m.status === "POSITIVE"
                       ? "bg-green-900/20 text-green-400"
                       : m.status === "NEGATIVE"
@@ -114,7 +114,7 @@ export default function DisclosureCard({ item }: DisclosureCardProps) {
         </div>
 
         {/* Right: score badge */}
-        <div className="flex-shrink-0 pt-0.5">
+        <div className="flex-shrink-0 pt-1">
           <ScoreBadge score={item.dvi_score} size="lg" />
         </div>
       </div>

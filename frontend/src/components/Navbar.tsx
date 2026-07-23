@@ -68,16 +68,16 @@ export default function Navbar() {
                   <User size={16} />
                   <span>{session.user?.email?.split("@")[0]}</span>
                 </Link>
-                <button onClick={handleLogout} className="btn-outline text-xs py-1.5 px-3">
+                <button onClick={handleLogout} className="btn-outline text-sm py-1.5 px-3">
                   로그아웃
                 </button>
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                <Link href="/login" className="btn-outline text-xs py-1.5 px-3">
+                <Link href="/login" className="btn-outline text-sm py-1.5 px-3">
                   로그인
                 </Link>
-                <Link href="/signup" className="btn-primary text-xs py-1.5 px-3">
+                <Link href="/signup" className="btn-primary text-sm py-1.5 px-3">
                   회원가입
                 </Link>
               </div>
