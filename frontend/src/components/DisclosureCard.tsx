@@ -23,9 +23,65 @@ const categoryChip: Record<string, { label: string; color: string }> = {
 
 type Signal = { icon: string; label: string; color: string; bg: string };
 
+const _NEGATIVE_RULES = new Set([
+  "MA_MANAGEMENT_DISPUTE",
+  "MA_MAJOR_CHANGE_NEWLY_FORMED",
+  "MA_BLOCK_TRADE",
+  "BIOTECH_CLINICAL_HOLD",
+  "BIOTECH_TECH_RETURN",
+  "CAPITAL_RAISING_FREE_REDUCTION",
+  "BUSINESS_CONTRACT_TERMINATED",
+  "BUSINESS_CONTRACT_MODIFIED",
+  "EARNINGS_PROFIT_TO_LOSS_NO_HISTORY",
+  "EARNINGS_REVENUE_DECREASE",
+  "EARNINGS_LOSS_CONTINUED",
+  "SHAREHOLDER_DISPOSAL_OPERATING",
+  "SHAREHOLDER_DISPOSAL_STOCK_OPTION",
+  "MA_SPLIT_WITH_LISTING",
+  "CAPITAL_RAISING_CB_WORKING",
+  "CAPITAL_RAISING_DELAYED_PAYMENT",
+]);
+
+const _POSITIVE_RULES = new Set([
+  "BIOTECH_FDA_APPROVAL",
+  "BIOTECH_TECH_TRANSFER_AMOUNT",
+  "SHAREHOLDER_FIRST_BUYBACK_CANCEL",
+  "SHAREHOLDER_REPEAT_BUYBACK_CANCEL",
+  "SHAREHOLDER_FIRST_DIVIDEND",
+  "SHAREHOLDER_DIVIDEND_HIGH",
+  "SHAREHOLDER_BUYBACK_ONLY",
+  "EARNINGS_LOSS_TO_PROFIT_NO_HISTORY",
+  "EARNINGS_REVENUE_INCREASE",
+  "MA_OVERSEAS_LISTING",
+  "MA_MERGER",
+  "MA_EQUITY_ACQUISITION",
+  "CAPITAL_RAISING_THIRD_PARTY_CONGLO",
+  "CAPITAL_RAISING_FREE_INCREASE",
+  "CAPITAL_RAISING_PAID_REDUCTION",
+  "MA_MAJOR_CHANGE_CONGLO_FIRST",
+  "SHAREHOLDER_DIVIDEND_LOW",
+]);
+
+export type DisclosureNature = "positive" | "negative" | "neutral";
+
+export function getNature(item: DisclosureItem): DisclosureNature {
+  const sid = item.sub_rule_id || "";
+  if (_NEGATIVE_RULES.has(sid)) return "negative";
+  if (_POSITIVE_RULES.has(sid)) return "positive";
+  if (item.risk_flag === "HIGH_RISK_TRAP") return "negative";
+  if (item.category === "DELISTING_RISK") return "negative";
+  if (item.category === "ADMINISTRATIVE") return "neutral";
+  const s = item.dvi_score ?? 0;
+  if (s >= 90) return "positive";
+  if (s >= 70) return "positive";
+  if (s >= 40) return "neutral";
+  return "negative";
+}
+
 function getSignal(item: DisclosureItem): Signal {
   const isTrap = item.risk_flag === "HIGH_RISK_TRAP";
   const s = item.dvi_score ?? 0;
+  const nature = getNature(item);
 
   if (item.category === "ADMINISTRATIVE")
     return { icon: "⚪", label: "행정 공시", color: "text-gray-400", bg: "bg-gray-800/40" };
@@ -33,11 +89,14 @@ function getSignal(item: DisclosureItem): Signal {
   if (isTrap || s === 0)
     return { icon: "🔴", label: "위험", color: "text-red-400", bg: "bg-red-900/20" };
 
-  if (s >= 90)
+  if (nature === "positive" && s >= 90)
     return { icon: "🟢", label: "호재", color: "text-green-400", bg: "bg-green-900/20" };
 
-  if (s >= 70)
+  if (nature === "positive" && s >= 70)
     return { icon: "🟡", label: "긍정", color: "text-yellow-400", bg: "bg-yellow-900/20" };
+
+  if (nature === "negative")
+    return { icon: "🔴", label: "악재", color: "text-red-400", bg: "bg-red-900/20" };
 
   if (s >= 40)
     return { icon: "⚪", label: "중립", color: "text-gray-400", bg: "bg-gray-800/40" };
