@@ -140,6 +140,9 @@ def _extract_keywords(text: str) -> dict:
         elif re.search(r"채무상환", text):
             flags["cb_purpose"] = "채무상환"
 
+    flags["rights_offering"] = bool(re.search(r"(주주배정|일반공모)", text))
+    flags["free_increase"] = bool(re.search(r"무상증자", text))
+
     # Capital reduction type
     if re.search(r"무상감자", text):
         flags["capital_reduction_type"] = "무상"
@@ -184,7 +187,7 @@ def _extract_keywords(text: str) -> dict:
         except ValueError:
             pass
 
-    m = re.search(r"(최근\s*매출액\s*대비|매출액\s*대비).*?(\d+(?:\.\d+)?)\s*%", text)
+    m = re.search(r"(최근\s*매출액\s*대비|매출액\s*대비).*?(\d+(?:\.\d+)?)", text)
     if m:
         try:
             flags["revenue_ratio"] = float(m.group(2))
@@ -227,11 +230,11 @@ def _extract_keywords(text: str) -> dict:
         re.search(r"(적자지속|영업손실|당기순손실)", text)
     )
     flags["revenue_increase"] = bool(
-        re.search(r"(매출.*증가|실적.*개선|영업이익)", text)
-    )
+        re.search(r"(매출액.*증가|매출\s*액.*증가|실적.*개선)", text)
+    ) and not bool(re.search(r"(매출원가|매출채권|매출\s*원가|매출\s*채권)", text))
     flags["revenue_decrease"] = bool(
-        re.search(r"(매출.*감소|실적.*악화)", text)
-    )
+        re.search(r"(매출액.*감소|매출\s*액.*감소|실적.*악화)", text)
+    ) and not bool(re.search(r"(매출원가|매출채권|매출\s*원가|매출\s*채권)", text))
     m = re.search(r"(매출액|매출).*?(\d[\d,]*)\s*(억|원)", text)
     if m:
         try:
@@ -462,12 +465,9 @@ def _score_capital_raising(keywords: dict, ticker: str = None, supabase=None) ->
         # General third-party
         return (55, "CAPITAL_RAISING_THIRD_PARTY_GENERAL", "", "")
 
-    # 주주배정 + 일반공모
-    if title_keywords(keywords, ["주주배정", "일반공모"]):
+    if keywords.get("rights_offering"):
         return (10, "CAPITAL_RAISING_RIGHTS_OFFERING", "", "")
-
-    # 무상증자
-    if title_keywords(keywords, ["무상증자"]):
+    if keywords.get("free_increase"):
         return (68, "CAPITAL_RAISING_FREE_INCREASE", "", "")
 
     # CB / BW
