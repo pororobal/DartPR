@@ -77,11 +77,17 @@ const _POSITIVE_RULES = new Set([
   "MA_ACTIVIST",
   "MA_BUSINESS_TRANSFER",
   "MA_SHARE_EXCHANGE",
+  "MA_MAJOR_CHANGE_GENERAL",
+  "MA_BULK_HOLDING_MANAGEMENT",
+  "MA_PROXY_FIGHT",
+  "MA_EGM_DISPUTE",
+  "MA_OVERSEAS_LISTING",
   "CAPITAL_RAISING_THIRD_PARTY_CONGLO",
   "CAPITAL_RAISING_FREE_INCREASE",
   "CAPITAL_RAISING_PAID_REDUCTION",
   "CAPITAL_RAISING_CB_EARLY_REDEEM",
   "CAPITAL_RAISING_CB_PRICE_UP",
+  "CAPITAL_RAISING_CB_FACILITY",
   "MA_MAJOR_CHANGE_CONGLO_FIRST",
 ]);
 
@@ -100,7 +106,6 @@ export function getNature(item: DisclosureItem): DisclosureNature {
 
   const s = item.dvi_score ?? 0;
   if (s >= 90) return "positive";
-  if (s >= 70) return "positive";
   if (s >= 40) return "neutral";
   return "negative";
 }

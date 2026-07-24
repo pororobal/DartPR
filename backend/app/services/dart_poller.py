@@ -28,6 +28,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from app.config import settings
 from app.services.supabase_client import get_supabase
 from app.services.rules_engine import (
+    check_administrative,
     check_hard_fail,
     evaluate_disclosure,
 )
@@ -132,34 +133,57 @@ async def _fetch_disclosure_list() -> list[dict]:
     today = datetime.now().astimezone()
     date_str = today.strftime("%Y%m%d")
 
-    params = {
-        "crtfc_key": settings.opendart_api_key,
-        "page_no": 1,
-        "page_count": 100,
-        "bgn_de": date_str,
-        "end_de": date_str,
-    }
+    all_items: list[dict] = []
+    page_no = 1
+    page_count = 100
 
     async with httpx.AsyncClient(timeout=30.0) as client:
-        try:
-            resp = await client.get(OPENDART_LIST_URL, params=params)
-            resp.raise_for_status()
-            data = resp.json()
+        while True:
+            params = {
+                "crtfc_key": settings.opendart_api_key,
+                "page_no": page_no,
+                "page_count": page_count,
+                "bgn_de": date_str,
+                "end_de": date_str,
+            }
+
+            try:
+                resp = await client.get(OPENDART_LIST_URL, params=params)
+                resp.raise_for_status()
+                data = resp.json()
+            except httpx.HTTPError as e:
+                logger.error(f"OpenDART HTTP error (page {page_no}): {e}")
+                break
+            except Exception as e:
+                logger.error(
+                    f"OpenDART fetch error (page {page_no}): {e}",
+                    exc_info=True,
+                )
+                break
 
             if data.get("status") != "000":
                 logger.warning(
-                    f"OpenDART API error: {data.get('message', 'unknown')}"
+                    f"OpenDART API error (page {page_no}): "
+                    f"{data.get('message', 'unknown')}"
                 )
-                return []
+                break
 
-            return data.get("list", [])
+            items = data.get("list", [])
+            all_items.extend(items)
+            logger.debug(
+                f"Fetched page {page_no}: {len(items)} disclosures "
+                f"(total: {len(all_items)})"
+            )
 
-        except httpx.HTTPError as e:
-            logger.error(f"OpenDART HTTP error: {e}")
-            return []
-        except Exception as e:
-            logger.error(f"OpenDART fetch error: {e}", exc_info=True)
-            return []
+            # Stop if fewer items than page_count (last page)
+            if len(items) < page_count:
+                break
+
+            page_no += 1
+            # Respect API rate limit: 1 req/s
+            await asyncio.sleep(1)
+
+    return all_items
 
 
 async def _fetch_document_text(rcept_no: str) -> Optional[str]:
@@ -212,21 +236,19 @@ async def _fetch_document_text(rcept_no: str) -> Optional[str]:
 
 async def _process_disclosure(item: dict):
     rcept_no = item.get("rcept_no", "")
-    ticker = item.get("corp_code", "")
+    ticker = item.get("stock_code", "") or ""
     corp_name = _clean_text(item.get("corp_name", ""))
     title = _clean_text(item.get("report_nm", "")).strip()
-    rcept_dt = item.get("rcept_dt", "")
 
-    try:
-        published_at = datetime.strptime(str(rcept_dt), "%Y%m%d").replace(
-            tzinfo=timezone.utc
-        )
-    except (ValueError, TypeError):
-        published_at = datetime.now(timezone.utc)
+    published_at = datetime.now(timezone.utc)
 
-    raw_text = await _fetch_document_text(rcept_no)
-    if raw_text is None:
+    # 행정공시 (IR개최, 기준일설정 등)는 원문 다운로드 불필요
+    if check_administrative(title):
         raw_text = f"{corp_name} - {title}"
+    else:
+        raw_text = await _fetch_document_text(rcept_no)
+        if raw_text is None:
+            raw_text = f"{corp_name} - {title}"
     raw_text = _clean_text(raw_text)
 
     if not rcept_no:

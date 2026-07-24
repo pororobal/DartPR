@@ -693,14 +693,6 @@ def _score_business_contract(keywords: dict, ticker: str = None, supabase=None) 
     else:
         base_score = 15
 
-    # 가중치: 신규 거래처 × 1.1, 기존 × 0.85
-    if supabase and ticker and counterparty:
-        past = _count_disclosures_by_ticker(supabase, ticker)
-        if past > 0:
-            # Check if this counterparty appeared before (rough: search in raw_text matches)
-            is_new = True  # optimistic default — we can refine later
-            base_score = int(base_score * (1.1 if is_new else 0.85))
-
     # Contract detail adjustments
     if keywords.get("exclusive_supply", False) and base_score >= 20:
         base_score = max(base_score, 85)
@@ -961,11 +953,6 @@ def _score_shareholder_ma(keywords: dict, ticker: str = None, supabase=None) -> 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-def title_keywords(keywords: dict, search_terms: list[str]) -> bool:
-    """Check if any of the search terms appear in keywords context."""
-    return any(kw in str(keywords.get(key, "")) for key in keywords for kw in search_terms)
-
 
 def _impact_level_from_score(score: int) -> str:
     """Map DVI score to impact_level values matching DB constraint (HIGH_IMPACT, NORMAL, LOW_IMPACT)."""
