@@ -56,11 +56,14 @@ async def update_user_plan(
         raise HTTPException(status_code=404, detail="User not found")
 
     # Generate API key for developer plan
-    update_data = {
+    update_data: dict = {
         "plan": req.plan,
         "plan_updated_by": req.updated_by,
         "plan_updated_at": "now()",
     }
+
+    if req.plan_expires_at:
+        update_data["plan_expires_at"] = req.plan_expires_at
 
     if req.plan == "developer" and not existing.data.get("api_key"):
         import secrets
@@ -83,6 +86,7 @@ async def update_user_plan(
         email=row["email"],
         plan=row["plan"],
         api_key=row.get("api_key"),
+        plan_expires_at=row.get("plan_expires_at"),
     )
 
 

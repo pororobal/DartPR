@@ -8,6 +8,9 @@ ALTER TABLE disclosures ADD COLUMN IF NOT EXISTS sub_type TEXT;
 ALTER TABLE disclosures ADD COLUMN IF NOT EXISTS is_feed_visible BOOLEAN DEFAULT false;
 ALTER TABLE disclosures ADD COLUMN IF NOT EXISTS skip_llm BOOLEAN DEFAULT false;
 
+-- 1b. New columns on users
+ALTER TABLE users ADD COLUMN IF NOT EXISTS plan_expires_at TIMESTAMPTZ;
+
 -- 2. Index for history lookups
 CREATE INDEX IF NOT EXISTS idx_disclosures_ticker_cat_date
   ON disclosures(ticker, category, published_at DESC);

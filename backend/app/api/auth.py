@@ -64,11 +64,13 @@ async def get_current_user(
         .execute()
     )
 
+    row = user_row.data or {}
     return {
         "id": auth_user.id,
         "email": auth_user.email,
-        "plan": user_row.data.get("plan", "free") if user_row.data else "free",
-        "api_key": user_row.data.get("api_key") if user_row.data else None,
+        "plan": row.get("plan", "free"),
+        "api_key": row.get("api_key"),
+        "plan_expires_at": row.get("plan_expires_at"),
     }
 
 
@@ -112,11 +114,13 @@ async def optional_get_current_user(
             .maybe_single()
             .execute()
         )
+        row = user_row.data or {}
         return {
             "id": auth_user.id,
             "email": auth_user.email,
-            "plan": user_row.data.get("plan", "free") if user_row.data else "free",
-            "api_key": user_row.data.get("api_key") if user_row.data else None,
+            "plan": row.get("plan", "free"),
+            "api_key": row.get("api_key"),
+            "plan_expires_at": row.get("plan_expires_at"),
         }
     except Exception:
         return None
@@ -189,15 +193,15 @@ async def login(req: LoginRequest):
         .maybe_single()
         .execute()
     )
-    plan = user_row.data.get("plan", "free") if user_row.data else "free"
-    api_key = user_row.data.get("api_key") if user_row.data else None
+    row = user_row.data or {}
 
     return AuthResponse(
         user=UserResponse(
             id=user.id,
             email=user.email or "",
-            plan=plan,
-            api_key=api_key,
+            plan=row.get("plan", "free"),
+            api_key=row.get("api_key"),
+            plan_expires_at=row.get("plan_expires_at"),
         ),
         access_token=auth_resp.session.access_token,
         refresh_token=auth_resp.session.refresh_token,
@@ -223,4 +227,5 @@ async def me(user: dict = Depends(get_current_user)):
         email=user["email"],
         plan=user["plan"],
         api_key=user.get("api_key"),
+        plan_expires_at=user.get("plan_expires_at"),
     )
