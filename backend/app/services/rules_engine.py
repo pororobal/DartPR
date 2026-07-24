@@ -50,8 +50,8 @@ class ScoreResult:
     sub_type: str = ""
     sub_rule_id: str = ""
     dvi_score: int = 30
-    impact_level: str = "MEDIUM"
-    risk_flag: str = ""
+    impact_level: str = "LOW_IMPACT"
+    risk_flag: str = "CLEAN"
     is_feed_visible: bool = False
     skip_llm: bool = False
     deceptive_pattern_detected: Optional[bool] = None
@@ -463,7 +463,7 @@ def _score_capital_raising(keywords: dict, ticker: str = None, supabase=None) ->
         return (55, "CAPITAL_RAISING_THIRD_PARTY_GENERAL", "", "")
 
     # 주주배정 + 일반공모
-    if any(k in title_keywords(keywords, ["주주배정", "일반공모"])):
+    if title_keywords(keywords, ["주주배정", "일반공모"]):
         return (10, "CAPITAL_RAISING_RIGHTS_OFFERING", "", "")
 
     # 무상증자
@@ -836,7 +836,7 @@ def evaluate_disclosure(
         sub_rule_id=sub_id,
         dvi_score=score,
         impact_level=_impact_level_from_score(score),
-        risk_flag=risk_flag,
+        risk_flag=risk_flag or "CLEAN",
         is_feed_visible=is_feed_visible,
         skip_llm=skip_llm,
     )
