@@ -644,11 +644,11 @@ def _score_shareholder_return(keywords: dict, ticker: str = None, supabase=None)
         history = _get_shareholder_history(supabase, ticker)
         past_cancels = sum(
             1 for h in history
-            if h.get("sub_type", "") in ("자사주소각", "취득+소각")
+            if (h.get("sub_type") or "") in ("자사주소각", "취득+소각")
         )
         past_dividends = sum(
             1 for h in history
-            if h.get("sub_type", "").startswith("배당")
+            if (h.get("sub_type") or "").startswith("배당")
         )
 
         is_first_buyback = past_cancels < 2
@@ -749,15 +749,13 @@ def title_keywords(keywords: dict, search_terms: list[str]) -> bool:
 
 
 def _impact_level_from_score(score: int) -> str:
+    """Map DVI score to impact_level values matching DB constraint (HIGH_IMPACT, NORMAL, LOW_IMPACT)."""
     if score >= 90:
-        return "HIGH"
-    elif score >= 70:
-        return "MEDIUM_HIGH"
+        return "HIGH_IMPACT"
     elif score >= 40:
-        return "MEDIUM"
-    elif score > 0:
-        return "LOW"
-    return "CRITICAL"
+        return "NORMAL"
+    else:
+        return "LOW_IMPACT"
 
 
 # ---------------------------------------------------------------------------
@@ -781,7 +779,7 @@ def evaluate_disclosure(
             category="ADMINISTRATIVE",
             sub_rule_id="ADMIN_DISCLOSURE",
             dvi_score=10,
-            impact_level="LOW",
+            impact_level="LOW_IMPACT",
             is_feed_visible=False,
             skip_llm=True,
         )
@@ -793,7 +791,7 @@ def evaluate_disclosure(
             category="DELISTING_RISK",
             sub_rule_id=f"HARD_FAIL_{hard_fail.matched_keyword}",
             dvi_score=0,
-            impact_level="CRITICAL",
+            impact_level="HIGH_IMPACT",
             risk_flag="HIGH_RISK_TRAP",
             is_feed_visible=True,
             skip_llm=True,
@@ -820,7 +818,7 @@ def evaluate_disclosure(
             sub_type=sub_type,
             sub_rule_id=sub_id,
             dvi_score=0,
-            impact_level="CRITICAL",
+            impact_level="HIGH_IMPACT",
             risk_flag="HIGH_RISK_TRAP",
             is_feed_visible=True,
             skip_llm=True,

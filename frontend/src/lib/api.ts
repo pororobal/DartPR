@@ -18,6 +18,14 @@ async function apiFetch<T>(path: string, options: FetchOptions = {}): Promise<T>
     ...headers,
   };
 
+  // Auto-attach auth token from localStorage if available
+  if (typeof window !== "undefined") {
+    const token = localStorage.getItem("supabase_access_token");
+    if (token) {
+      requestHeaders["Authorization"] = `Bearer ${token}`;
+    }
+  }
+
   const res = await fetch(`${API_BASE}${path}`, {
     method,
     headers: requestHeaders,
