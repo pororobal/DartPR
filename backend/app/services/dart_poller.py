@@ -1,13 +1,15 @@
 """
 OpenDART API poller service.
 
-Background scheduler that:
+Background scheduler pipeline:
 1. Polls OpenDART API every N seconds
 2. Fetches new disclosures
-3. Runs hard-fail filter
-4. Categorizes via keyword guesser
-5. Stores to Supabase (INSERT)
-6. Triggers Groq LLM enrichment asynchronously -> UPDATE
+3. Step 1: Administrative check → skip scoring & LLM
+4. Step 2: Fast-fail check → risk_flag=HIGH_RISK_TRAP, always visible, skip LLM
+5. Step 3: Keyword category guess
+6. Step 4: Full scoring (all §5 tables, DB history lookups)
+7. Step 5: LLM enrichment ONLY if score >= FEED_VISIBILITY_THRESHOLD (80)
+8. INSERT → Realtime broadcast
 """
 
 import asyncio
@@ -25,7 +27,10 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from app.config import settings
 from app.services.supabase_client import get_supabase
-from app.services.rules_engine import check_hard_fail
+from app.services.rules_engine import (
+    check_hard_fail,
+    evaluate_disclosure,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -234,12 +239,20 @@ async def _process_disclosure(item: dict):
         logger.debug(f"Disclosure {rcept_no} already exists -- skipping")
         return
 
-    # 1. Hard-fail check
-    hard_fail = check_hard_fail(raw_text)
-    skip_llm = hard_fail.detected
+    score_result = evaluate_disclosure(
+        title=title,
+        raw_text=raw_text,
+        ticker=ticker,
+        supabase=supabase,
+    )
 
-    # 2. Keyword-based category guess (pre-LLM)
-    category, sub_rule_flags = _guess_category(title, raw_text)
+    logger.info(
+        f"Scored {rcept_no}: {corp_name} - {title[:60]}"
+        f" → cat={score_result.category} score={score_result.dvi_score}"
+        f" feed_visible={score_result.is_feed_visible}"
+        f" skip_llm={score_result.skip_llm}"
+        f" risk={score_result.risk_flag or '-'}"
+    )
 
     insert_data = _clean_payload({
         "dart_rcept_no": rcept_no,
@@ -248,28 +261,36 @@ async def _process_disclosure(item: dict):
         "title": title,
         "raw_text": raw_text,
         "published_at": published_at.isoformat(),
-        "category": category,
-        "deceptive_pattern_detected": True if hard_fail.detected else None,
-        "momentum_authenticity": "LOW" if hard_fail.detected else None,
-        "llm_status": "DONE" if skip_llm else "PENDING",
+        "category": score_result.category,
+        "sub_type": score_result.sub_type,
+        "sub_rule_id": score_result.sub_rule_id,
+        "dvi_score": score_result.dvi_score,
+        "impact_level": score_result.impact_level,
+        "risk_flag": score_result.risk_flag,
+        "is_feed_visible": score_result.is_feed_visible,
+        "deceptive_pattern_detected": score_result.deceptive_pattern_detected,
+        "momentum_authenticity": score_result.momentum_authenticity,
+        "llm_status": "DONE" if score_result.skip_llm else "PENDING",
     })
 
     if "\\u0000" in json.dumps(insert_data, ensure_ascii=True):
-        logger.warning(f"Skipping disclosure {rcept_no}: payload still contains null escape")
+        logger.warning(
+            f"Skipping disclosure {rcept_no}: payload still contains null escape"
+        )
         return
 
     try:
         supabase.table("disclosures").insert(insert_data).execute()
         logger.info(
-            f"Inserted disclosure {rcept_no}: {corp_name} - {title}"
-            f" (category={category}, hard_fail={hard_fail.detected})"
+            f"Inserted disclosure {rcept_no}: {corp_name} - {title[:60]}"
+            f" (score={score_result.dvi_score}, feed={score_result.is_feed_visible})"
         )
     except Exception as e:
         logger.error(f"Supabase insert failed for {rcept_no}: {e}")
         return
 
-    # 3. If not hard-fail, trigger LLM enrichment asynchronously
-    if not skip_llm:
+    # LLM enrichment ONLY for score >= threshold (80) — spec §5-9
+    if not score_result.skip_llm:
         asyncio.create_task(
             _enrich_with_llm(rcept_no, ticker, corp_name, title, raw_text)
         )
@@ -321,67 +342,6 @@ async def _enrich_with_llm(
             }).eq("dart_rcept_no", rcept_no).execute()
         except Exception:
             pass
-
-
-# ---------------------------------------------------------------------------
-# Category guesser (pre-LLM fallback)
-# ---------------------------------------------------------------------------
-
-def _guess_category(title: str, raw_text: str) -> tuple[str, dict]:
-    t = title.upper()
-
-    if any(kw in t for kw in [
-        "감사의견", "횡령", "배임", "감자", "상장폐지",
-        "관리종목지정우려", "상장적격성",
-    ]):
-        return ("DELISTING_RISK", {})
-
-    if any(kw in t for kw in ["주식소각", "자기주식소각"]):
-        return ("SHAREHOLDER_RETURN", {})
-    if any(kw in t for kw in ["자사주취득", "자기주식취득"]):
-        return ("SHAREHOLDER_RETURN", {})
-    if any(kw in t for kw in ["자기주식처분"]):
-        return ("SHAREHOLDER_RETURN", {})
-    if any(kw in t for kw in ["최대주주변경"]):
-        return ("SHAREHOLDER_RETURN", {})
-    if any(kw in t for kw in ["배당", "주주환원"]):
-        return ("SHAREHOLDER_RETURN", {})
-
-    if any(kw in t for kw in ["유상증자", "주주배정"]):
-        return ("CAPITAL_RAISING", {})
-    if any(kw in t for kw in [
-        "CB 발행", "BW 발행", "전환사채", "전환청구권",
-        "신주인수권", "3자배정",
-    ]):
-        return ("CAPITAL_RAISING", {})
-
-    if any(kw in t for kw in ["단일판매", "공급계약", "판매계약", "수주"]):
-        return ("BUSINESS_CONTRACT", {})
-    if any(kw in t for kw in ["무상증자"]):
-        return ("BUSINESS_CONTRACT", {})
-
-    if any(kw in t for kw in ["적자전환", "적자지속", "영업손실", "당기순손실"]):
-        return ("EARNINGS", {})
-    if any(kw in t for kw in ["흑자전환", "영업이익", "매출액증가", "실적개선"]):
-        return ("EARNINGS", {})
-    if any(kw in t for kw in ["감사보고서", "사업보고서", "반기보고서", "분기보고서"]):
-        return ("EARNINGS", {})
-    if any(kw in t for kw in ["실적", "매출액"]):
-        return ("EARNINGS", {})
-
-    if any(kw in t for kw in ["소송", "회생", "파산", "법정관리"]):
-        return ("DELISTING_RISK", {})
-
-    if any(kw in t for kw in ["합병결정", "분할합병", "포괄적주식교환"]):
-        return ("EARNINGS", {})
-
-    if any(kw in t for kw in ["대량보유", "주식등의대량보유"]):
-        return ("EARNINGS", {})
-
-    if any(kw in t for kw in ["임상", "FDA 승인", "품목허가", "신약", "기술이전"]):
-        return ("BIOTECH", {})
-
-    return ("EARNINGS", {})
 
 
 # ---------------------------------------------------------------------------

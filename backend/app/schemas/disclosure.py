@@ -21,6 +21,11 @@ class DisclosureResponse(BaseModel):
     published_at: datetime
     category: Optional[str] = None
     sub_rule_id: Optional[str] = None
+    sub_type: Optional[str] = None
+    dvi_score: Optional[int] = None
+    impact_level: Optional[str] = None
+    risk_flag: Optional[str] = None
+    is_feed_visible: Optional[bool] = None
     deceptive_pattern_detected: Optional[bool] = None
     momentum_authenticity: Optional[str] = None
     llm_summary: Optional[str] = None
@@ -34,10 +39,3 @@ class DisclosureListResponse(BaseModel):
     total: int
     page: int
     per_page: int
-
-
-class HistoryQueryParams(BaseModel):
-    ticker: Optional[str] = None
-    category: Optional[str] = None
-    page: int = 1
-    per_page: int = 20

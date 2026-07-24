@@ -31,6 +31,22 @@ class Settings(BaseSettings):
     # Polling
     poll_interval_seconds: int = 30
 
+    # Scoring & visibility
+    feed_visibility_threshold: int = 80  # disclosures with score >= this go to /live
+    free_tier_delay_seconds: int = 180   # 3-minute delay for free/anonymous users
+
+    # Valid categories (canonical list)
+    categories: List[str] = [
+        "ADMINISTRATIVE",
+        "CAPITAL_RAISING",
+        "BIOTECH",
+        "BUSINESS_CONTRACT",
+        "EARNINGS",
+        "SHAREHOLDER_RETURN",
+        "DELISTING_RISK",
+        "OTHER",
+    ]
+
     @property
     def cors_origin_list(self) -> List[str]:
         if self.cors_origins == "*":

@@ -4,14 +4,46 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { disclosures, DisclosureItem } from "@/lib/api";
 import DisclosureCard from "@/components/DisclosureCard";
-import { RefreshCw, AlertCircle } from "lucide-react";
+import { RefreshCw, AlertCircle, Lock, Crown } from "lucide-react";
 
 export default function LivePage() {
   const [items, setItems] = useState<DisclosureItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [user, setUser] = useState<any>(null);
+  const [isPremium, setIsPremium] = useState(false);
+  const [delayed, setDelayed] = useState(true);
 
-  // Keep Render backend alive (ping every 4 min to prevent sleep)
+  // Check auth state
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      const u = session?.user;
+      setUser(u || null);
+      if (u) {
+        const meta = u.user_metadata || {};
+        const plan = meta.plan || "free";
+        setIsPremium(plan === "pro" || plan === "developer");
+      }
+    };
+    checkAuth();
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      const u = session?.user;
+      setUser(u || null);
+      if (u) {
+        const meta = u.user_metadata || {};
+        const plan = meta.plan || "free";
+        setIsPremium(plan === "pro" || plan === "developer");
+      } else {
+        setIsPremium(false);
+      }
+    });
+
+    return () => listener?.subscription.unsubscribe();
+  }, []);
+
+  // Keep Render backend alive
   useEffect(() => {
     const ping = () => {
       fetch(`${process.env.NEXT_PUBLIC_API_URL}/health`).catch(() => {});
@@ -26,43 +58,43 @@ export default function LivePage() {
     setLoading(true);
     setError(null);
     try {
-      const result = await disclosures.list();
+      let token: string | undefined;
+      if (user) {
+        const { data: { session } } = await supabase.auth.getSession();
+        token = session?.access_token;
+      }
+      const result = await disclosures.live(token);
       setItems(result.data);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load data");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
 
-  // Supabase Realtime subscription
+  // Realtime subscription (new disclosures)
   useEffect(() => {
     const channel = supabase
       .channel("disclosures-live")
       .on(
         "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "disclosures",
-        },
+        { event: "INSERT", schema: "public", table: "disclosures" },
         (payload) => {
           const newItem = payload.new as DisclosureItem;
-          setItems((prev) => [newItem, ...prev].slice(0, 100));
-          window.scrollTo({ top: 0, behavior: "smooth" });
+          // Only show if feed-visible
+          if (newItem.is_feed_visible) {
+            setItems((prev) => [newItem, ...prev].slice(0, 100));
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }
         }
       )
       .on(
         "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "disclosures",
-        },
+        { event: "UPDATE", schema: "public", table: "disclosures" },
         (payload) => {
           const updated = payload.new as DisclosureItem;
           setItems((prev) =>
@@ -78,6 +110,14 @@ export default function LivePage() {
       supabase.removeChannel(channel);
     };
   }, []);
+
+  // Determine real-time vs delayed display
+  const displayItems = isPremium
+    ? items
+    : items.filter((it) => {
+        const cutoff = Date.now() - 3 * 60 * 1000;
+        return new Date(it.published_at).getTime() <= cutoff;
+      });
 
   if (loading) {
     return (
@@ -113,8 +153,15 @@ export default function LivePage() {
       <div className="flex items-center justify-between mb-5">
         <div>
           <h1 className="text-2xl font-bold text-white">실시간 피드</h1>
-          <p className="text-sm text-[var(--text-secondary)] mt-1">
-            총 {items.length}개 공시
+          <p className="text-sm text-[var(--text-secondary)] mt-1 flex items-center gap-1.5">
+            {isPremium ? (
+              <><Crown size={14} className="text-yellow-400" /> 프리미엄 — 실시간</>
+            ) : (
+              <><Lock size={14} /> 3분 지연 (Pro 가입 시 실시간)</>
+            )}
+            <span className="text-[var(--text-muted)]">
+              &middot; {displayItems.length}개 공시
+            </span>
           </p>
         </div>
         <button
@@ -131,12 +178,12 @@ export default function LivePage() {
 
       {/* Feed */}
       <div className="space-y-3">
-        {items.map((item) => (
+        {displayItems.map((item) => (
           <DisclosureCard key={item.dart_rcept_no} item={item} />
         ))}
       </div>
 
-      {items.length === 0 && (
+      {displayItems.length === 0 && (
         <div className="text-center py-16">
           <p className="text-[var(--text-muted)]">아직 공시가 없습니다</p>
         </div>

@@ -106,25 +106,10 @@ class KeyMetricItem(BaseModel):
     status: str
 
 
-class SubRuleFlags(BaseModel):
-    third_party_target: Optional[str] = None
-    payment_delay_days: Optional[float] = None
-    cb_purpose: Optional[str] = None
-    deal_amount_disclosed: Optional[bool] = None
-    counterparty_disclosed: Optional[bool] = None
-    revenue_ratio_estimate: Optional[float] = None
-    major_holder_acquirer_type: Optional[str] = None
-    delisting_hard_fail_detected: bool = False
-
-
 class GroqOutput(BaseModel):
     ticker: str = ""
     company_name: str = ""
     title: str = ""
-    category: Optional[str] = None
-    sub_rule_flags: SubRuleFlags = Field(default_factory=SubRuleFlags)
-    deceptive_pattern_detected: bool = False
-    momentum_authenticity: str = "MEDIUM"
     llm_summary: str = ""
     key_metrics: List[KeyMetricItem] = Field(default_factory=list)
 

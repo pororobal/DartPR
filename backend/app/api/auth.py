@@ -146,14 +146,6 @@ async def signup(req: SignupRequest):
             detail="Signup failed — no user returned",
         )
 
-    # Create row in users table
-    svc = get_supabase()
-    svc.table("users").insert({
-        "id": user.id,
-        "email": user.email,
-        "plan": "free",
-    }).execute()
-
     return AuthResponse(
         user=UserResponse(
             id=user.id,

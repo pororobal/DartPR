@@ -84,7 +84,12 @@ export interface DisclosureItem {
   title: string;
   published_at: string;
   category: string | null;
+  sub_type: string | null;
   sub_rule_id: string | null;
+  dvi_score: number | null;
+  impact_level: string | null;
+  risk_flag: string | null;
+  is_feed_visible: boolean | null;
   deceptive_pattern_detected: boolean | null;
   momentum_authenticity: string | null;
   llm_summary: string | null;
@@ -101,20 +106,52 @@ export interface DisclosureList {
 }
 
 export const disclosures = {
-  list: () =>
-    apiFetch<DisclosureList>("/api/v1/disclosures/list"),
+  /** Live feed — public (3-min delay) unless auth token provided */
+  live: (authToken?: string) => {
+    const headers: Record<string, string> = {};
+    if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
+    return apiFetch<DisclosureList>("/api/v1/disclosures/live", { headers });
+  },
 
+  /** History with full filter support */
   history: (params: {
     ticker?: string;
+    company_name?: string;
     category?: string;
+    score_min?: number;
+    score_max?: number;
+    date_from?: string;
+    date_to?: string;
+    risk_flag?: string;
     page?: number;
     per_page?: number;
   }) => {
     const search = new URLSearchParams();
+    const str = (v: unknown) => String(v);
     if (params.ticker) search.set("ticker", params.ticker);
+    if (params.company_name) search.set("company_name", params.company_name);
     if (params.category) search.set("category", params.category);
+    if (params.score_min !== undefined) search.set("score_min", str(params.score_min));
+    if (params.score_max !== undefined) search.set("score_max", str(params.score_max));
+    if (params.date_from) search.set("date_from", params.date_from);
+    if (params.date_to) search.set("date_to", params.date_to);
+    if (params.risk_flag) search.set("risk_flag", params.risk_flag);
     search.set("page", String(params.page || 1));
     search.set("per_page", String(params.per_page || 20));
     return apiFetch<DisclosureList>(`/api/v1/disclosures/history?${search}`);
   },
+
+  /** Trigger a manual poll */
+  poll: () =>
+    apiFetch<{ message: string }>("/api/v1/disclosures/poll", { method: "POST" }),
+
+  /** Re-classify all existing disclosures */
+  reclassify: () =>
+    apiFetch<{ message: string }>("/api/v1/disclosures/reclassify", { method: "POST" }),
+
+  /** Get stats */
+  stats: () =>
+    apiFetch<{ total_disclosures: number; feed_visible: number; by_category: Record<string, number> }>(
+      "/api/v1/disclosures/stats"
+    ),
 };
