@@ -234,7 +234,7 @@ async def _fetch_document_text(rcept_no: str) -> Optional[str]:
 # Disclosure processing pipeline
 # ---------------------------------------------------------------------------
 
-async def _process_disclosure(item: dict):
+async def _process_disclosure(item: dict, skip_document: bool = False):
     rcept_no = item.get("rcept_no", "")
     ticker = item.get("stock_code", "") or ""
     corp_name = _clean_text(item.get("corp_name", ""))
@@ -242,8 +242,8 @@ async def _process_disclosure(item: dict):
 
     published_at = datetime.now(timezone.utc)
 
-    # 행정공시 (IR개최, 기준일설정 등)는 원문 다운로드 불필요
-    if check_administrative(title):
+    # Skip document download for existing items or administrative disclosures
+    if skip_document or check_administrative(title):
         raw_text = f"{corp_name} - {title}"
     else:
         raw_text = await _fetch_document_text(rcept_no)
@@ -379,6 +379,13 @@ async def _enrich_with_llm(
 # ---------------------------------------------------------------------------
 
 async def poll_dart_once():
+    # Skip polling during DART submission downtime (19:00 ~ 07:30)
+    now = datetime.now().astimezone()
+    hour = now.hour
+    if hour >= 19 or hour < 7:
+        logger.debug("Skipping poll during DART downtime (19:00-07:30)")
+        return
+
     logger.info("Polling DART API...")
     items = await _fetch_disclosure_list()
 
@@ -388,7 +395,18 @@ async def poll_dart_once():
 
     logger.info(f"Found {len(items)} disclosures -- processing...")
 
+    # Get existing rcept_nos to skip document download
+    supabase = get_supabase()
+    existing_result = (
+        supabase.table("disclosures")
+        .select("dart_rcept_no")
+        .execute()
+    )
+    existing_rcept_nos = {row["dart_rcept_no"] for row in (existing_result.data or [])}
+
     for item in items:
-        await _process_disclosure(item)
+        rcept_no = item.get("rcept_no", "")
+        skip_document = rcept_no in existing_rcept_nos
+        await _process_disclosure(item, skip_document=skip_document)
 
     logger.info(f"Poll cycle complete: {len(items)} items processed")
