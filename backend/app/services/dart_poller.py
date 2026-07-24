@@ -242,6 +242,10 @@ async def _process_disclosure(item: dict, skip_document: bool = False):
 
     published_at = datetime.now(timezone.utc)
 
+    if not rcept_no:
+        logger.warning("Disclosure item missing rcept_no -- skipping")
+        return
+
     # Skip document download for existing items or administrative disclosures
     if skip_document or check_administrative(title):
         raw_text = f"{corp_name} - {title}"
@@ -251,20 +255,7 @@ async def _process_disclosure(item: dict, skip_document: bool = False):
             raw_text = f"{corp_name} - {title}"
     raw_text = _clean_text(raw_text)
 
-    if not rcept_no:
-        logger.warning("Disclosure item missing rcept_no -- skipping")
-        return
-
     supabase = get_supabase()
-    existing = (
-        supabase.table("disclosures")
-        .select("id")
-        .eq("dart_rcept_no", rcept_no)
-        .execute()
-    )
-    if existing.data and len(existing.data) > 0:
-        logger.debug(f"Disclosure {rcept_no} already exists -- skipping")
-        return
 
     score_result = evaluate_disclosure(
         title=title,
@@ -395,7 +386,7 @@ async def poll_dart_once():
 
     logger.info(f"Found {len(items)} disclosures -- processing...")
 
-    # Get existing rcept_nos to skip document download
+    # Get existing rcept_nos to skip document download and duplicate check
     supabase = get_supabase()
     existing_result = (
         supabase.table("disclosures")
@@ -404,9 +395,11 @@ async def poll_dart_once():
     )
     existing_rcept_nos = {row["dart_rcept_no"] for row in (existing_result.data or [])}
 
-    for item in items:
-        rcept_no = item.get("rcept_no", "")
-        skip_document = rcept_no in existing_rcept_nos
-        await _process_disclosure(item, skip_document=skip_document)
+    # Filter out existing items
+    new_items = [item for item in items if item.get("rcept_no") not in existing_rcept_nos]
+    logger.info(f"New disclosures: {len(new_items)} / {len(items)}")
 
-    logger.info(f"Poll cycle complete: {len(items)} items processed")
+    for item in new_items:
+        await _process_disclosure(item, skip_document=False)
+
+    logger.info(f"Poll cycle complete: {len(new_items)} new items processed")
