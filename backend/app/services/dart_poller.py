@@ -180,14 +180,19 @@ async def _fetch_document_text(rcept_no: str) -> Optional[str]:
                     for name in archive.namelist():
                         if name.endswith("/"):
                             continue
-                        chunks.append(_decode_bytes(archive.read(name)))
+                        data = archive.read(name)
+                        data = data.replace(b"\x00", b"")
+                        chunks.append(_decode_bytes(data))
                 return _strip_markup("\n".join(chunks))
 
             if b"\x00" in content:
                 logger.warning(
                     f"Document response contains binary nulls for {rcept_no}; "
-                    "using metadata fallback"
+                    "stripping nulls and continuing"
                 )
+                content = content.replace(b"\x00", b"")
+                if content.strip():
+                    return _strip_markup(_decode_bytes(content))
                 return None
 
             return _strip_markup(_decode_bytes(content))
