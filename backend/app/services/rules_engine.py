@@ -456,9 +456,9 @@ def _score_capital_raising(keywords: dict, ticker: str = None, supabase=None) ->
     """§5-1 자금조달 scoring."""
     target = keywords.get("third_party_target", "")
 
-    # 유상증자/공모 철회 — 자금조달 실패 = 유동성 위기
+    # 유상증자/공모 철회 — 악재 해소일 수도, 자금조달 실패일 수도
     if keywords.get("capital_raise_withdrawn"):
-        return (3, "CAPITAL_RAISING_WITHDRAWN", "", "")
+        return (22, "CAPITAL_RAISING_WITHDRAWN", "", "")
 
     # 제3자배정
     if target or keywords.get("is_third_party"):
