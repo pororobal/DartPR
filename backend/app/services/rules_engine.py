@@ -150,6 +150,28 @@ def _extract_keywords(text: str) -> dict:
         re.search(r"(유상증자\s*철회|공모\s*철회|증자\s*철회)", text)
     )
 
+    # CB conversion exercised — 전환청구권 행사 = 실제 희석 발생
+    flags["cb_conversion_exercised"] = bool(
+        re.search(r"(전환청구|전환청구권\s*행사)", text)
+    )
+    # CB early redemption — 만기전 취득/소각 = 긍정
+    flags["cb_early_redemption"] = bool(
+        re.search(r"(만기전\s*취득|조기상환|사채\s*소각)", text)
+    )
+    # Warrant exercise — 신주인수권 행사
+    flags["warrant_exercise"] = bool(
+        re.search(r"(신주인수권\s*행사|BW\s*행사)", text)
+    )
+    # Exchangeable bonds — 교환사채
+    flags["eb_detected"] = bool(re.search(r"교환사채|EB", text))
+    # Exercise price adjustment direction
+    flags["exercise_price_up"] = bool(
+        re.search(r"(행사가액.*(상향|인상)|전환가액.*(상향|인상))", text)
+    )
+    flags["exercise_price_down"] = bool(
+        re.search(r"(행사가액.*(하향|인하)|전환가액.*(하향|인하))", text)
+    )
+
     # Capital reduction type
     if re.search(r"무상감자", text):
         flags["capital_reduction_type"] = "무상"
@@ -219,10 +241,21 @@ def _extract_keywords(text: str) -> dict:
     flags["buyback_only"] = bool(
         re.search(r"(자사주\s*취득|자기주식\s*취득)", text)
     ) and not flags["buyback_and_cancel"]
+    flags["open_market_buyback"] = bool(
+        re.search(r"(자사주\s*공개매수|자기주식\s*공개매수)", text)
+    )
     flags["treasury_disposal"] = bool(re.search(r"(자사주\s*처분|자기주식\s*처분)", text))
     flags["stock_option"] = bool(re.search(r"주식매수선택권", text))
+    flags["treasury_as_collateral"] = bool(
+        re.search(r"(자기주식\s*담보|자사주\s*담보)", text)
+    )
+    flags["major_holder_pledge"] = bool(
+        re.search(r"(최대주주.*담보|지분.*담보|주식.*담보)", text)
+    )
     flags["dividend"] = bool(re.search(r"(배당|배당률)", text))
     if flags["dividend"]:
+        flags["stock_dividend"] = bool(re.search(r"주식배당", text))
+        flags["interim_dividend"] = bool(re.search(r"중간배당|분기배당", text))
         m = re.search(r"(\d+(?:\.\d+)?)\s*%", text)
         if m:
             try:
@@ -242,6 +275,16 @@ def _extract_keywords(text: str) -> dict:
     flags["revenue_decrease"] = bool(
         re.search(r"(매출액.*감소|매출\s*액.*감소|실적.*악화)", text)
     ) and not bool(re.search(r"(매출원가|매출채권|매출\s*원가|매출\s*채권)", text))
+    flags["preliminary_earnings"] = bool(re.search(r"잠정실적", text))
+    flags["separate_financials"] = bool(re.search(r"별도기준", text))
+    flags["consolidated_financials"] = bool(re.search(r"연결기준", text))
+    flags["non_operating_income"] = bool(re.search(r"영업외손익|영업외수익", text))
+    flags["operating_profit_positive"] = bool(
+        re.search(r"(영업이익.*흑자|영업이익.*증가|영업이익률.*개선)", text)
+    )
+    flags["operating_profit_negative"] = bool(
+        re.search(r"(영업손실|영업이익.*적자|영업이익.*감소)", text)
+    )
     m = re.search(r"(매출액|매출).*?(\d[\d,]*)\s*(억|원)", text)
     if m:
         try:
@@ -279,6 +322,69 @@ def _extract_keywords(text: str) -> dict:
     flags["overseas_listing"] = bool(
         re.search(r"(해외.*상장|ADR)", text)
     )
+    flags["egm_called"] = bool(
+        re.search(r"(임시주주총회|주주총회\s*소집)", text)
+    )
+    flags["proxy_fight"] = bool(
+        re.search(r"(의결권\s*대리행사|위임장\s*권유)", text)
+    )
+    flags["shareholder_proposal"] = bool(
+        re.search(r"(주주제안|소액주주.*제안)", text)
+    )
+    flags["activist_detected"] = bool(
+        re.search(r"(행동주의|액티비스트|얼라인|강성주주)", text)
+    )
+    flags["debt_to_equity"] = bool(re.search(r"출자전환", text))
+    flags["debt_forgiveness"] = bool(
+        re.search(r"(채무면제|채무재조정|채무.*감면)", text)
+    )
+    flags["business_transfer"] = bool(re.search(r"영업양수도", text))
+    flags["share_exchange"] = bool(
+        re.search(r"(주식교환|주식이전|스왑)", text)
+    )
+
+    # RISK flags
+    flags["audit_unqualified"] = bool(re.search(r"감사의견.*적정", text))
+    flags["audit_modified"] = bool(re.search(r"감사의견.*한정|감사의견.*부적정", text))
+    flags["going_concern"] = bool(
+        re.search(r"(계속기업.*불확실성|계속기업.*의문)", text)
+    )
+    flags["capital_impairment"] = bool(
+        re.search(r"(완전자본잠식|부분자본잠식|자본잠식)", text)
+    )
+    flags["management_issue"] = bool(
+        re.search(r"(관리종목\s*지정|관리종목\s*해당)", text)
+    )
+    flags["caution_stock"] = bool(re.search(r"투자주의환기종목", text))
+    flags["ceo_changed"] = bool(re.search(r"대표이사\s*변경|대표이사\s*선임", text))
+    flags["auditor_changed"] = bool(re.search(r"감사인\s*변경", text))
+    flags["listing_review"] = bool(
+        re.search(r"(상장적격성|실질심사|상장유지)", text)
+    )
+
+    # CONTRACT detail flags
+    flags["exclusive_supply"] = bool(re.search(r"(독점공급|독점판매)", text))
+    flags["export_contract"] = bool(
+        re.search(r"(해외수출|수출계약|해외.*공급)", text)
+    )
+    flags["contract_extension"] = bool(
+        re.search(r"(계약.*연장|공급.*연장)", text)
+    )
+    flags["development_agreement"] = bool(
+        re.search(r"(공동개발|개발계약|업무협약)", text)
+    )
+    flags["mou_detected"] = bool(re.search(r"양해각서|MOU", text))
+    flags["service_contract"] = bool(re.search(r"용역계약", text))
+
+    # ETC flags
+    flags["patent_acquisition"] = bool(re.search(r"특허권\s*취득|특허\s*취득", text))
+    flags["new_business_entry"] = bool(
+        re.search(r"(신규사업\s*진출|사업\s*다각화|신사업)", text)
+    )
+    flags["business_purpose_change"] = bool(re.search(r"사업목적\s*추가|사업목적\s*변경", text))
+    flags["facility_investment"] = bool(
+        re.search(r"(시설투자|신규시설|생산시설.*증설)", text)
+    )
 
     return flags
 
@@ -297,8 +403,13 @@ def guess_category(title: str, raw_text: str, keywords: dict = None) -> tuple[st
         return ("ADMINISTRATIVE", keywords)
 
     # DELISTING_RISK / hard fail
+    # "감사의견 적정" = 긍정 (회계 투명), "감사의견 거절/한정" = 악재
+    if "감사의견" in t:
+        if keywords and not keywords.get("audit_unqualified", False):
+            return ("DELISTING_RISK", keywords)
+        # 감사의견 적정 → treat as earnings (audit report)
     if any(kw in t for kw in [
-        "감사의견", "횡령", "배임", "감자", "상장폐지",
+        "횡령", "배임", "감자", "상장폐지",
         "관리종목", "상장적격성", "회생", "법정관리",
     ]):
         return ("DELISTING_RISK", keywords)
@@ -481,6 +592,22 @@ def _score_capital_raising(keywords: dict, ticker: str = None, supabase=None) ->
     # CB 리픽싱 — 전환가액 하향 조정 = 지속적 희석
     if keywords.get("cb_refixing"):
         return (5, "CAPITAL_RAISING_CB_REFIXING", "", "")
+    if keywords.get("exercise_price_down"):
+        return (5, "CAPITAL_RAISING_CB_REFIXING", "", "")
+    if keywords.get("exercise_price_up"):
+        return (55, "CAPITAL_RAISING_CB_PRICE_UP", "", "")
+
+    # CB 전환청구 — 풋옵션 행사 = 희석 발생
+    if keywords.get("cb_conversion_exercised"):
+        return (8, "CAPITAL_RAISING_CB_CONVERTED", "", "")
+
+    # CB 조기상환/만기전취득 — 긍정
+    if keywords.get("cb_early_redemption"):
+        return (65, "CAPITAL_RAISING_CB_EARLY_REDEEM", "", "")
+
+    # 신주인수권(BW) 행사
+    if keywords.get("warrant_exercise"):
+        return (8, "CAPITAL_RAISING_WARRANT_EXERCISED", "", "")
 
     # CB / BW
     cb_purpose = keywords.get("cb_purpose", "")
@@ -574,6 +701,16 @@ def _score_business_contract(keywords: dict, ticker: str = None, supabase=None) 
             is_new = True  # optimistic default — we can refine later
             base_score = int(base_score * (1.1 if is_new else 0.85))
 
+    # Contract detail adjustments
+    if keywords.get("exclusive_supply", False) and base_score >= 20:
+        base_score = max(base_score, 85)
+    if keywords.get("export_contract", False):
+        base_score = min(base_score + 10, 100)
+    if keywords.get("mou_detected", False):
+        base_score = min(int(base_score * 0.7), 70)
+    if keywords.get("development_agreement", False):
+        base_score = min(base_score + 5, 100)
+
     sub_id = f"BUSINESS_CONTRACT_{int(ratio) if ratio else 'NA'}_PCT"
     return (min(base_score, 100), sub_id, "", "")
 
@@ -622,11 +759,24 @@ def _score_earnings(keywords: dict, ticker: str = None, supabase=None) -> tuple:
 
     # Fallback (no history or no DB)
     if loss_to_profit:
+        # 영업외손익으로 흑자전환 = 일회성 = 가짜 턴어라운드
+        if keywords.get("non_operating_income", False):
+            return (40, "EARNINGS_LOSS_TO_PROFIT_NON_OP", "", "흑자전환")
         return (65, "EARNINGS_LOSS_TO_PROFIT_NO_HISTORY", "", "흑자전환")
     if profit_to_loss:
         return (10, "EARNINGS_PROFIT_TO_LOSS_NO_HISTORY", "", "적자전환")
     if loss_continued:
         return (8, "EARNINGS_LOSS_CONTINUED", "", "적자지속")
+
+    # 감사의견 적정 = 회계 투명 = 긍정
+    if keywords.get("audit_unqualified", False):
+        return (65, "EARNINGS_AUDIT_UNQUALIFIED", "", "감사의견적정")
+
+    # 영업이익 개선
+    if keywords.get("operating_profit_positive", False):
+        return (58, "EARNINGS_OP_PROFIT_IMPROVING", "", "영업이익개선")
+    if keywords.get("operating_profit_negative", False):
+        return (8, "EARNINGS_OP_PROFIT_WORSENING", "", "영업이익악화")
 
     # 매출 변동
     if revenue_increase and not revenue_decrease:
@@ -666,6 +816,18 @@ def _score_shareholder_return(keywords: dict, ticker: str = None, supabase=None)
         is_first_buyback = past_cancels < 2
         is_first_dividend = past_dividends == 0
 
+    # 자사주 공개매수 — 일반 바이백보다 훨씬 강력한 호재
+    if keywords.get("open_market_buyback", False):
+        return (98, "SHAREHOLDER_OPEN_MARKET_BUYBACK", "", "공개매수")
+
+    # 자기주식 담보제공 — 자사주를 담보로 잡힘 = 자금난 시그널
+    if keywords.get("treasury_as_collateral", False):
+        return (5, "SHAREHOLDER_TREASURY_COLLATERAL", "", "담보제공")
+
+    # 최대주주 지분 담보제공 — 대주주 자금 사정 좋지 않음
+    if keywords.get("major_holder_pledge", False):
+        return (12, "SHAREHOLDER_MAJOR_PLEDGE", "", "지분담보")
+
     # 자사주 취득+소각 (시장에 자사주 매입+소각 = 긍정)
     if buyback_cancel:
         if is_first_buyback:
@@ -683,8 +845,11 @@ def _score_shareholder_return(keywords: dict, ticker: str = None, supabase=None)
             return (45, "SHAREHOLDER_DISPOSAL_STOCK_OPTION", "", "자사주처분")
         return (10, "SHAREHOLDER_DISPOSAL_OPERATING", "", "자사주처분")
 
-    # 배당 (한국 배당의 주가 영향은 미국보다 약함, 시가배당률 낮음)
+    # 배당
     if dividend:
+        # 주식배당 = 현금 없어서 주식으로 = 악재
+        if keywords.get("stock_dividend", False):
+            return (25, "SHAREHOLDER_STOCK_DIVIDEND", "", "주식배당")
         if is_first_dividend:
             return (65, "SHAREHOLDER_FIRST_DIVIDEND", "", "최초배당")
         if dividend_rate >= 5:
@@ -747,6 +912,48 @@ def _score_shareholder_ma(keywords: dict, ticker: str = None, supabase=None) -> 
     # 해외증시/ADR 상장 — 과거엔 호재, 요즘은 ADR 상장 자체로 주가 변동 거의 없음
     if keywords.get("overseas_listing", False):
         return (60, "MA_OVERSEAS_LISTING", "", "해외상장")
+
+    # 임시주주총회 소집 — 경영권 분쟁 전초전 or 의사결정
+    if keywords.get("egm_called", False):
+        if keywords.get("management_dispute", False):
+            return (85, "MA_EGM_DISPUTE", "", "임시주총")
+        return (50, "MA_EGM_GENERAL", "", "임시주총")
+
+    # 의결권 대리행사 권유 — 위임장 대결 = 분쟁 격화
+    if keywords.get("proxy_fight", False):
+        return (75, "MA_PROXY_FIGHT", "", "위임장대결")
+
+    # 주주제안 — 행동주의 펀드의 시작
+    if keywords.get("shareholder_proposal", False):
+        return (60, "MA_SHAREHOLDER_PROPOSAL", "", "주주제안")
+
+    # 행동주의 펀드 등장
+    if keywords.get("activist_detected", False):
+        return (70, "MA_ACTIVIST", "", "행동주의")
+
+    # 출자전환 — 채무를 지분으로 = 부실기업 구조조정
+    if keywords.get("debt_to_equity", False):
+        return (5, "MA_DEBT_TO_EQUITY", "", "출자전환")
+
+    # 채무면제/재조정 — 파산 직전
+    if keywords.get("debt_forgiveness", False):
+        return (3, "MA_DEBT_FORGIVENESS", "", "채무면제")
+
+    # 영업양수도 — 사업부 매각/인수
+    if keywords.get("business_transfer", False):
+        return (55, "MA_BUSINESS_TRANSFER", "", "영업양수도")
+
+    # 주식교환/스왑
+    if keywords.get("share_exchange", False):
+        return (55, "MA_SHARE_EXCHANGE", "", "주식교환")
+
+    # 대표이사 변경 — 퍼포먼스에 따라 호재/악재 갈림, 기본 중립
+    if keywords.get("ceo_changed", False):
+        return (45, "MA_CEO_CHANGED", "", "대표이사변경")
+
+    # 감사인 변경 — 회계 정책 변경 or 갈등 = 약한 부정
+    if keywords.get("auditor_changed", False):
+        return (30, "MA_AUDITOR_CHANGED", "", "감사인변경")
 
     return (30, "MA_GENERAL", "", "")
 
@@ -814,6 +1021,47 @@ def evaluate_disclosure(
     # Step 3: Category guess + keyword extraction
     combined = f"{title} {raw_text[:3000]}"
     keywords = _extract_keywords(combined)
+
+    # Risk-specific early scoring (before standard category routing)
+    if keywords.get("going_concern"):
+        return ScoreResult(
+            category="DELISTING_RISK",
+            sub_rule_id="RISK_GOING_CONCERN",
+            dvi_score=2,
+            impact_level="HIGH_IMPACT",
+            risk_flag="CLEAN",
+            is_feed_visible=True,
+            skip_llm=True,
+        )
+    if keywords.get("capital_impairment"):
+        return ScoreResult(
+            category="DELISTING_RISK",
+            sub_rule_id="RISK_CAPITAL_IMPAIRMENT",
+            dvi_score=5,
+            impact_level="HIGH_IMPACT",
+            risk_flag="CLEAN",
+            is_feed_visible=True,
+            skip_llm=True,
+        )
+    if keywords.get("management_issue") or keywords.get("caution_stock"):
+        return ScoreResult(
+            category="DELISTING_RISK",
+            sub_rule_id="RISK_MANAGEMENT_ISSUE",
+            dvi_score=8,
+            impact_level="HIGH_IMPACT",
+            is_feed_visible=True,
+            skip_llm=True,
+        )
+    if keywords.get("listing_review"):
+        return ScoreResult(
+            category="DELISTING_RISK",
+            sub_rule_id="RISK_LISTING_REVIEW",
+            dvi_score=6,
+            impact_level="HIGH_IMPACT",
+            is_feed_visible=True,
+            skip_llm=True,
+        )
+
     category, _ = guess_category(title, raw_text, keywords)
 
     # Step 4: Compute score
