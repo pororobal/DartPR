@@ -229,3 +229,17 @@ async def me(user: dict = Depends(get_current_user)):
         api_key=user.get("api_key"),
         plan_expires_at=user.get("plan_expires_at"),
     )
+
+
+@router.post("/set-plan")
+async def set_plan(email: str, plan: str, user: dict = Depends(get_current_user)):
+    """Set a user's plan using service_role. Caller must be authenticated."""
+    if not email or plan not in ("free", "pro", "admin"):
+        raise HTTPException(status_code=400, detail="Invalid email or plan")
+    from app.services.supabase_client import get_supabase
+    svc = get_supabase()
+    try:
+        svc.table("users").update({"plan": plan}).eq("email", email).execute()
+        return {"status": "ok", "email": email, "plan": plan}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
