@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
-import { disclosures, DisclosureItem } from "@/lib/api";
+import { disclosures, DisclosureItem, auth } from "@/lib/api";
 import DisclosureCard from "@/components/DisclosureCard";
 import { RefreshCw, AlertCircle, Lock, Crown } from "lucide-react";
 
@@ -14,27 +14,31 @@ export default function LivePage() {
   const [isPremium, setIsPremium] = useState(false);
   const [delayed, setDelayed] = useState(true);
 
-  // Check auth state
+  // Check auth state + plan from backend API
   useEffect(() => {
     const checkAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      const u = session?.user;
-      setUser(u || null);
-      if (u) {
-        const meta = u.user_metadata || {};
-        const plan = meta.plan || "free";
-        setIsPremium(plan === "pro" || plan === "developer");
+      setUser(session?.user || null);
+      if (session) {
+        try {
+          const userData = await auth.me();
+          setIsPremium(userData.plan === "pro" || userData.plan === "admin");
+        } catch {
+          setIsPremium(false);
+        }
       }
     };
     checkAuth();
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      const u = session?.user;
-      setUser(u || null);
-      if (u) {
-        const meta = u.user_metadata || {};
-        const plan = meta.plan || "free";
-        setIsPremium(plan === "pro" || plan === "developer");
+    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      setUser(session?.user || null);
+      if (session) {
+        try {
+          const userData = await auth.me();
+          setIsPremium(userData.plan === "pro" || userData.plan === "admin");
+        } catch {
+          setIsPremium(false);
+        }
       } else {
         setIsPremium(false);
       }

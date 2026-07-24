@@ -36,7 +36,7 @@ export default function NoticesPage() {
         </div>
         <div>
           <h1 className="text-2xl font-bold text-white">공지사항</h1>
-          <p className="text-xs text-[var(--text-secondary)]">DART0s 업데이트 및 안내</p>
+          <p className="text-xs text-[var(--text-secondary)]">DartPR 업데이트 및 안내</p>
         </div>
       </div>
 

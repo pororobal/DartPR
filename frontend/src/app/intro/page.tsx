@@ -93,7 +93,7 @@ export default function IntroPage() {
           </h1>
 
           <p className="text-lg text-[var(--text-secondary)] mt-4 max-w-xl leading-relaxed">
-            DART0s는 OpenDART 공시를 실시간으로 수집하고 AI가 분석합니다.
+            DartPR은 OpenDART 공시를 실시간으로 수집하고 AI가 분석합니다.
             중요도 점수와 리스크 탐지로 핵심 공시를 놓치지 마세요.
           </p>
 
@@ -150,7 +150,7 @@ export default function IntroPage() {
         <div className="max-w-5xl mx-auto px-4 py-20">
           <div className="text-center mb-12">
             <h2 className="text-2xl md:text-3xl font-bold text-white">핵심 기능</h2>
-            <p className="text-sm text-[var(--text-secondary)] mt-2">DART0s가 제공하는 모든 분석 도구</p>
+            <p className="text-sm text-[var(--text-secondary)] mt-2">DartPR이 제공하는 모든 분석 도구</p>
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -200,7 +200,7 @@ export default function IntroPage() {
             <span className="text-white">PR</span>
           </span>
           <span className="text-xs text-[var(--text-muted)]">
-            DART0s © 2026 · 데이터 출처: OpenDART
+            DartPR © 2026 · 데이터 출처: OpenDART
           </span>
         </div>
       </footer>
