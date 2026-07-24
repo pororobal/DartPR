@@ -150,6 +150,17 @@ async def signup(req: SignupRequest):
             detail="Signup failed — no user returned",
         )
 
+    # Create user record in public.users table
+    svc = get_supabase()
+    try:
+        svc.table("users").insert({
+            "id": user.id,
+            "email": user.email,
+            "plan": "free",
+        }).execute()
+    except Exception as e:
+        logger.warning(f"Failed to create public.users record (non-fatal): {e}")
+
     return AuthResponse(
         user=UserResponse(
             id=user.id,

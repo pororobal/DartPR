@@ -300,7 +300,7 @@ export default function DisclosureCard({ item, isAdmin = false }: DisclosureCard
             <ExternalLink size={11} />
             DART 원문 보기
           </a>
-          {isAdmin && !isAdministrative && !isTrap && !item.llm_summary && (
+          {isAdmin && !isAdministrative && !isTrap && (!item.llm_summary || item.llm_summary.includes("실패")) && (
             <button
               onClick={handleAnalyze}
               disabled={analyzing}
