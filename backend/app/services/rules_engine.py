@@ -184,7 +184,7 @@ def _extract_keywords(text: str) -> dict:
         except ValueError:
             pass
 
-    m = re.search(r"(최근\s*매출액\s*대비|매출액\s*대비).*?(\d+)\s*%", text)
+    m = re.search(r"(최근\s*매출액\s*대비|매출액\s*대비).*?(\d+(?:\.\d+)?)\s*%", text)
     if m:
         try:
             flags["revenue_ratio"] = float(m.group(2))

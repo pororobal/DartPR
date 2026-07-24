@@ -71,6 +71,10 @@ export function getNature(item: DisclosureItem): DisclosureNature {
   if (item.risk_flag === "HIGH_RISK_TRAP") return "negative";
   if (item.category === "DELISTING_RISK") return "negative";
   if (item.category === "ADMINISTRATIVE") return "neutral";
+
+  if (item.category === "BUSINESS_CONTRACT" && (item.dvi_score ?? 0) >= 50)
+    return "positive";
+
   const s = item.dvi_score ?? 0;
   if (s >= 90) return "positive";
   if (s >= 70) return "positive";

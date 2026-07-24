@@ -192,18 +192,6 @@ export default function IntroPage() {
         </div>
       </section>
 
-      {/* ── Footer ────────────────────────────────────────── */}
-      <footer className="border-t border-[var(--border-color)] py-8">
-        <div className="max-w-5xl mx-auto px-4 flex items-center justify-between">
-          <span className="text-sm font-bold">
-            <span className="text-[var(--accent-mint)]">Dart</span>
-            <span className="text-white">PR</span>
-          </span>
-          <span className="text-xs text-[var(--text-muted)]">
-            DartPR © 2026 · 데이터 출처: OpenDART
-          </span>
-        </div>
-      </footer>
     </div>
   );
 }
