@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.api import auth, disclosures, admin, dev
+from app.api import auth, disclosures, admin, dev, notices
 
 
 @asynccontextmanager
@@ -38,6 +38,7 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
 app.include_router(disclosures.router, prefix="/api/v1/disclosures", tags=["disclosures"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["admin"])
+app.include_router(notices.router, prefix="/api/v1", tags=["notices"])
 app.include_router(dev.router, prefix="/api/v1/dev", tags=["developer"])
 
 

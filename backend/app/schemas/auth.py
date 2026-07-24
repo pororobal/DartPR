@@ -31,6 +31,6 @@ class AuthResponse(BaseModel):
 
 
 class PlanUpdateRequest(BaseModel):
-    plan: str  # 'pro' | 'developer'
+    plan: str  # 'free' | 'pro' | 'admin'
     updated_by: str
     plan_expires_at: Optional[str] = None  # ISO 8601, null = 무제한

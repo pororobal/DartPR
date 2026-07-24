@@ -80,7 +80,7 @@ def require_plan(min_plan: str = "pro"):
     Usage: `Depends(require_plan("pro"))`
     """
     async def _check(user: dict = Depends(get_current_user)) -> dict:
-        plan_rank = {"free": 0, "pro": 1, "developer": 2}
+        plan_rank = {"free": 0, "pro": 1, "admin": 2}
         if plan_rank.get(user["plan"], -1) < plan_rank.get(min_plan, 0):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

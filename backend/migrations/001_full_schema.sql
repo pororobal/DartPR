@@ -169,5 +169,24 @@ INSERT INTO conglomerate_groups (group_name, affiliate_name, designated_year) VA
   ('우리금융', '우리은행', 2026),
   ('우리금융', '우리금융지주', 2026);
 
--- 5. Seed administrative patterns into disclosures (mark existing ones)
+-- 5. Notices table
+CREATE TABLE IF NOT EXISTS notices (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title TEXT NOT NULL,
+  content TEXT NOT NULL,
+  author_email TEXT NOT NULL,
+  pinned BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ
+);
+
+-- 6. Update users check constraint for new plan values
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_plan_check;
+ALTER TABLE users ADD CONSTRAINT users_plan_check
+  CHECK (plan IN ('free', 'pro', 'admin'));
+
+-- 7. Insert admin user (optional, run manually after signup)
+-- UPDATE users SET plan = 'admin' WHERE email = 'kimdy3185@gmail.com';
+
+-- 8. Seed administrative patterns into disclosures (mark existing ones)
 -- This is optional; the code will check patterns at runtime

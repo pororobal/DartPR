@@ -86,7 +86,7 @@ async def _resolve_user_from_api_key(x_api_key: str = Header(None)) -> Optional[
             .maybe_single()
             .execute()
         )
-        if result.data and result.data.get("plan") in ("pro", "developer"):
+        if result.data and result.data.get("plan") in ("pro", "admin"):
             return result.data
     except Exception:
         pass

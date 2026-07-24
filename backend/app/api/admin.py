@@ -36,10 +36,10 @@ async def update_user_plan(
     Manually update a user's plan.
     Called after admin confirms payment via KakaoTalk.
     """
-    if req.plan not in ("pro", "developer"):
+    if req.plan not in ("free", "pro", "admin"):
         raise HTTPException(
             status_code=400,
-            detail="Plan must be 'pro' or 'developer'",
+            detail="Plan must be 'free', 'pro' or 'admin'",
         )
 
     supabase = get_supabase()
@@ -64,10 +64,6 @@ async def update_user_plan(
 
     if req.plan_expires_at:
         update_data["plan_expires_at"] = req.plan_expires_at
-
-    if req.plan == "developer" and not existing.data.get("api_key"):
-        import secrets
-        update_data["api_key"] = f"dart0s_dev_{secrets.token_hex(24)}"
 
     supabase.table("users").update(update_data).eq("id", user_id).execute()
 
