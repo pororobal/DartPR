@@ -163,3 +163,43 @@ export const disclosures = {
       "/api/v1/disclosures/stats"
     ),
 };
+
+export interface Notice {
+  id: string;
+  title: string;
+  content: string;
+  author_email: string;
+  pinned: boolean;
+  created_at: string;
+  updated_at: string | null;
+}
+
+export interface NoticeList {
+  data: Notice[];
+  total: number;
+}
+
+export const notices_api = {
+  list: (page = 1, perPage = 20) =>
+    apiFetch<NoticeList>(`/api/v1/notices?page=${page}&per_page=${perPage}`),
+
+  get: (id: string) =>
+    apiFetch<Notice>(`/api/v1/notices/${id}`),
+
+  create: (title: string, content: string, pinned = false) =>
+    apiFetch<Notice>("/api/v1/notices", {
+      method: "POST",
+      body: { title, content, pinned },
+    }),
+
+  update: (id: string, data: { title?: string; content?: string; pinned?: boolean }) =>
+    apiFetch<Notice>(`/api/v1/notices/${id}`, {
+      method: "PUT",
+      body: data,
+    }),
+
+  delete: (id: string) =>
+    apiFetch<{ message: string }>(`/api/v1/notices/${id}`, {
+      method: "DELETE",
+    }),
+};

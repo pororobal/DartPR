@@ -10,13 +10,13 @@ import { User, ChevronDown, Crown, LogOut, CreditCard, Clock, Zap } from "lucide
 const planLabels: Record<string, string> = {
   free: "Free",
   pro: "Pro",
-  developer: "Developer",
+  admin: "Admin",
 };
 
 const planColors: Record<string, string> = {
   free: "bg-gray-700 text-gray-300",
   pro: "bg-yellow-900/40 text-yellow-400",
-  developer: "bg-purple-900/40 text-purple-400",
+  admin: "bg-red-900/40 text-red-400",
 };
 
 function getDaysLeft(expiresAt: string | null | undefined): number | null {
@@ -117,6 +117,18 @@ export default function Navbar() {
               className="text-sm font-medium text-[var(--text-secondary)] hover:text-white transition-colors"
             >
               히스토리
+            </Link>
+            <Link
+              href="/intro"
+              className="text-sm font-medium text-[var(--text-secondary)] hover:text-white transition-colors"
+            >
+              소개
+            </Link>
+            <Link
+              href="/notices"
+              className="text-sm font-medium text-[var(--text-secondary)] hover:text-white transition-colors"
+            >
+              공지사항
             </Link>
             <Link
               href="/pricing"
