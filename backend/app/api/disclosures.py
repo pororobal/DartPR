@@ -299,3 +299,77 @@ async def get_stats():
         "feed_visible": visible.count if hasattr(visible, "count") else 0,
         "by_category": category_counts,
     }
+
+
+# ---------------------------------------------------------------------------
+# /{id}/analyze — Manual LLM trigger (admin only)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/{disclosure_id}/analyze")
+async def trigger_llm_analysis(
+    disclosure_id: str,
+    user: Optional[dict] = Depends(get_premium_user),
+):
+    """
+    Manually trigger LLM analysis for a specific disclosure.
+
+    Admin-only endpoint to re-run or trigger LLM enrichment.
+    """
+    if not user or user.get("plan") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    from app.services.groq_llm import analyze_disclosure
+
+    supabase = get_supabase()
+    
+    # Get disclosure data
+    result = (
+        supabase.table("disclosures")
+        .select("id,dart_rcept_no,ticker,company_name,title,raw_text,dvi_score")
+        .eq("id", disclosure_id)
+        .maybe_single()
+        .execute()
+    )
+    
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Disclosure not found")
+    
+    row = result.data
+    rcept_no = row.get("dart_rcept_no", "")
+    ticker = row.get("ticker", "")
+    corp_name = row.get("company_name", "")
+    title = row.get("title", "")
+    raw_text = row.get("raw_text", "")
+    score = row.get("dvi_score", 0)
+    
+    # Determine brief vs full analysis
+    brief = score < 80
+    
+    try:
+        llm_result = await analyze_disclosure(
+            ticker=ticker,
+            company_name=corp_name,
+            title=title,
+            raw_text=raw_text,
+            brief=brief,
+        )
+        
+        # Update database
+        update_data = {
+            "llm_summary": llm_result.llm_summary[:8000],
+            "key_metrics": [m.model_dump() for m in llm_result.key_metrics],
+            "llm_raw_response": llm_result.model_dump(),
+            "llm_status": "DONE",
+        }
+        
+        supabase.table("disclosures").update(update_data).eq(
+            "id", disclosure_id
+        ).execute()
+        
+        logger.info(f"Manual LLM analysis triggered for {disclosure_id}")
+        return {"message": "LLM analysis completed", "summary": llm_result.llm_summary[:200]}
+        
+    except Exception as e:
+        logger.error(f"Manual LLM analysis failed for {disclosure_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"LLM analysis failed: {str(e)}")

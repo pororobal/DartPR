@@ -20,6 +20,7 @@ export default function LivePage() {
   const [error, setError] = useState<string | null>(null);
   const [user, setUser] = useState<any>(null);
   const [isPremium, setIsPremium] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [filter, setFilter] = useState<FilterMode>("all");
 
   // Check auth state + plan from backend API
@@ -31,8 +32,10 @@ export default function LivePage() {
         try {
           const userData = await auth.me();
           setIsPremium(userData.plan === "pro" || userData.plan === "admin");
+          setIsAdmin(userData.plan === "admin");
         } catch {
           setIsPremium(false);
+          setIsAdmin(false);
         }
       }
     };
@@ -44,11 +47,14 @@ export default function LivePage() {
         try {
           const userData = await auth.me();
           setIsPremium(userData.plan === "pro" || userData.plan === "admin");
+          setIsAdmin(userData.plan === "admin");
         } catch {
           setIsPremium(false);
+          setIsAdmin(false);
         }
       } else {
         setIsPremium(false);
+        setIsAdmin(false);
       }
     });
 
@@ -224,7 +230,7 @@ export default function LivePage() {
       {/* Feed */}
       <div className="space-y-3">
         {displayItems.map((item) => (
-          <DisclosureCard key={item.dart_rcept_no} item={item} />
+          <DisclosureCard key={item.dart_rcept_no} item={item} isAdmin={isAdmin} />
         ))}
       </div>
 

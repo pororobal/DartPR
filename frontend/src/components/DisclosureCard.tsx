@@ -1,10 +1,12 @@
 "use client";
 
-import { DisclosureItem } from "@/lib/api";
-import { ExternalLink, Info, Clock } from "lucide-react";
+import { useState } from "react";
+import { DisclosureItem, disclosures } from "@/lib/api";
+import { ExternalLink, Info, Clock, Sparkles } from "lucide-react";
 
 interface DisclosureCardProps {
   item: DisclosureItem;
+  isAdmin?: boolean;
 }
 
 // ─── Category helpers ─────────────────────────────────────────
@@ -181,7 +183,8 @@ function MetricCard({ label, value, status }: { label: string; value: string; st
 
 // ─── Main component ───────────────────────────────────────────
 
-export default function DisclosureCard({ item }: DisclosureCardProps) {
+export default function DisclosureCard({ item, isAdmin = false }: DisclosureCardProps) {
+  const [analyzing, setAnalyzing] = useState(false);
   const cat = item.category ? categoryChip[item.category] : null;
   const signal = getSignal(item);
   const cleanTitle = item.title?.replace(/\s+/g, " ").trim() || "";
@@ -190,7 +193,22 @@ export default function DisclosureCard({ item }: DisclosureCardProps) {
   });
   const isPending = item.llm_status === "PENDING" && !item.llm_summary;
   const isTrap = item.risk_flag === "HIGH_RISK_TRAP";
-  const isAdmin = item.category === "ADMINISTRATIVE";
+  const isAdministrative = item.category === "ADMINISTRATIVE";
+
+  const handleAnalyze = async () => {
+    if (!item.id) return;
+    setAnalyzing(true);
+    try {
+      await disclosures.analyze(item.id);
+      // Reload page to show updated data
+      window.location.reload();
+    } catch (e) {
+      console.error("LLM analysis failed:", e);
+      alert("LLM 분석에 실패했습니다");
+    } finally {
+      setAnalyzing(false);
+    }
+  };
 
   return (
     <div className="card p-4 animate-in hover:border-[var(--text-muted)] transition-all duration-200">
@@ -228,14 +246,14 @@ export default function DisclosureCard({ item }: DisclosureCardProps) {
       <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold mt-3 ${signal.bg} ${signal.color}`}>
         <span>{signal.icon}</span>
         <span>{signal.label}</span>
-        {item.sub_type && !isAdmin && !isTrap && (
+        {item.sub_type && !isAdministrative && !isTrap && (
           <span className="text-[var(--text-muted)] font-normal">· {item.sub_type}</span>
         )}
       </div>
 
       {/* ── Row 3: AI Summary ────────────────────────────── */}
       <div className="mt-3">
-        {isAdmin ? (
+        {isAdministrative ? (
           <p className="text-xs text-[var(--text-muted)] italic">행정성 공시 (분석 생략)</p>
         ) : isTrap ? (
           <p className="text-xs text-red-400/70 italic">위험 공시 — FAST-FAIL 매칭 (LLM 분석 생략)</p>
@@ -262,7 +280,7 @@ export default function DisclosureCard({ item }: DisclosureCardProps) {
       </div>
 
       {/* ── Row 4: Key Metrics Grid ──────────────────────── */}
-      {item.key_metrics && item.key_metrics.length > 0 && !isAdmin && (
+      {item.key_metrics && item.key_metrics.length > 0 && !isAdministrative && (
         <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
           {item.key_metrics.map((m, i) => (
             <MetricCard key={i} label={m.label} value={m.value} status={m.status} />
@@ -272,22 +290,34 @@ export default function DisclosureCard({ item }: DisclosureCardProps) {
 
       {/* ── Row 5: Footer ────────────────────────────────── */}
       <div className="flex items-center justify-between mt-3 pt-2 border-t border-[var(--border-color)]">
-        <a
-          href={item.dart_url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-xs text-[var(--accent-blue)] hover:text-[var(--accent-mint)] transition-colors"
-        >
-          <ExternalLink size={11} />
-          DART 원문 보기
-        </a>
-        {!isAdmin && !isTrap && !isPending && item.dvi_score !== null && item.dvi_score < 60 && (
+        <div className="flex items-center gap-3">
+          <a
+            href={item.dart_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-[var(--accent-blue)] hover:text-[var(--accent-mint)] transition-colors"
+          >
+            <ExternalLink size={11} />
+            DART 원문 보기
+          </a>
+          {isAdmin && !isAdministrative && !isTrap && !item.llm_summary && (
+            <button
+              onClick={handleAnalyze}
+              disabled={analyzing}
+              className="inline-flex items-center gap-1 text-xs text-[var(--accent-mint)] hover:text-white transition-colors disabled:opacity-50"
+            >
+              <Sparkles size={11} />
+              {analyzing ? "분석 중..." : "LLM 분석"}
+            </button>
+          )}
+        </div>
+        {!isAdministrative && !isTrap && !isPending && item.dvi_score !== null && item.dvi_score < 60 && (
           <span className="flex items-center gap-1 text-[10px] text-[var(--text-muted)]">
             <Info size={10} />
             AI 요약 미제공
           </span>
         )}
-        {!isAdmin && !isTrap && !isPending && item.llm_summary && (
+        {!isAdministrative && !isTrap && !isPending && item.llm_summary && (
           <span className="flex items-center gap-1 text-[10px] text-[var(--text-muted)]">
             <Info size={10} />
             AI 분석은 참고용입니다

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { disclosures, DisclosureItem } from "@/lib/api";
+import { disclosures, DisclosureItem, auth } from "@/lib/api";
 import DisclosureCard from "@/components/DisclosureCard";
 import {
   Search, ChevronLeft, ChevronRight, AlertCircle,
@@ -59,6 +59,20 @@ export default function HistoryPage() {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const perPage = 20;
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  // Check if user is admin
+  useEffect(() => {
+    const checkAdmin = async () => {
+      try {
+        const userData = await auth.me();
+        setIsAdmin(userData.plan === "admin");
+      } catch {
+        setIsAdmin(false);
+      }
+    };
+    checkAdmin();
+  }, []);
 
   // Filters
   const [ticker, setTicker] = useState("");
@@ -364,7 +378,7 @@ export default function HistoryPage() {
 
           <div className="space-y-3">
             {items.map((item) => (
-              <DisclosureCard key={item.dart_rcept_no} item={item} />
+              <DisclosureCard key={item.dart_rcept_no} item={item} isAdmin={isAdmin} />
             ))}
           </div>
 

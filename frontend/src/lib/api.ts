@@ -162,6 +162,12 @@ export const disclosures = {
     apiFetch<{ total_disclosures: number; feed_visible: number; by_category: Record<string, number> }>(
       "/api/v1/disclosures/stats"
     ),
+
+  /** Trigger LLM analysis for a specific disclosure (admin only) */
+  analyze: (id: string) =>
+    apiFetch<{ message: string; summary: string }>(`/api/v1/disclosures/${id}/analyze`, {
+      method: "POST",
+    }),
 };
 
 export interface Notice {
