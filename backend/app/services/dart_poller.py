@@ -294,10 +294,11 @@ async def _process_disclosure(item: dict):
         logger.error(f"Supabase insert failed for {rcept_no}: {e}")
         return
 
-    # LLM enrichment ONLY for score >= threshold (80) — spec §5-9
+    # LLM enrichment: 80+ full analysis, 60-79 brief summary, <60 skip
     if not score_result.skip_llm:
+        brief = score_result.dvi_score < 80
         asyncio.create_task(
-            _enrich_with_llm(rcept_no, ticker, corp_name, title, raw_text)
+            _enrich_with_llm(rcept_no, ticker, corp_name, title, raw_text, brief=brief)
         )
 
 
@@ -307,6 +308,7 @@ async def _enrich_with_llm(
     corp_name: str,
     title: str,
     raw_text: str,
+    brief: bool = False,
 ):
     try:
         from app.services.groq_llm import analyze_disclosure
@@ -316,6 +318,7 @@ async def _enrich_with_llm(
             company_name=corp_name,
             title=title,
             raw_text=raw_text,
+            brief=brief,
         )
 
         update_data = _clean_payload({

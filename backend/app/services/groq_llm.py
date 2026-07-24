@@ -123,16 +123,30 @@ def _safe_fallback(error_msg: str) -> GroqOutput:
     )
 
 
+BRIEF_PROMPT = """당신은 DART 공시 원문을 분석하는 증권사 애널리스트입니다.
+
+공시 원문을 읽고 핵심 사실을 1-2문장으로 간결히 요약하십시오.
+
+투자 판단, 호재/악재 표현, 주가 영향 예측 절대 금지.
+
+STRICT OUTPUT: 아래 JSON 스키마로만 응답하십시오.
+{
+  "llm_summary": "1-2문장 핵심 요약 (투자판단 금지)",
+  "key_metrics": []
+}"""
+
+
 async def analyze_disclosure(
     ticker: str,
     company_name: str,
     title: str,
     raw_text: str,
+    brief: bool = False,
 ) -> GroqOutput:
     """
     Call Groq API to summarize a disclosure.
-
-    Returns parsed GroqOutput. On any failure, returns safe fallback.
+    When brief=True, returns a 1-2 sentence summary (cheaper, faster).
+    When brief=False, returns full analysis with key_metrics.
     """
     if not settings.groq_api_key:
         logger.warning("GROQ_API_KEY not set -- skipping LLM analysis")
@@ -151,15 +165,18 @@ async def analyze_disclosure(
 {raw_text[:3500]}
 """
 
+        system_prompt = BRIEF_PROMPT if brief else SYSTEM_PROMPT
+        max_tokens = 150 if brief else 700
+
         async with _groq_semaphore:
             response = await client.chat.completions.create(
                 model=settings.groq_model,
                 messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_message},
                 ],
                 temperature=0.1,
-                max_tokens=700,
+                max_tokens=max_tokens,
                 response_format={"type": "json_object"},
             )
 

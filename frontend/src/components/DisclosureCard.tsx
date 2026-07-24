@@ -40,26 +40,26 @@ const _NEGATIVE_RULES = new Set([
   "MA_SPLIT_WITH_LISTING",
   "CAPITAL_RAISING_CB_WORKING",
   "CAPITAL_RAISING_DELAYED_PAYMENT",
+  "CAPITAL_RAISING_CB_REFIXING",
+  "CAPITAL_RAISING_WITHDRAWN",
 ]);
 
 const _POSITIVE_RULES = new Set([
   "BIOTECH_FDA_APPROVAL",
   "BIOTECH_TECH_TRANSFER_AMOUNT",
+  "BIOTECH_PHASE3_NDA",
   "SHAREHOLDER_FIRST_BUYBACK_CANCEL",
   "SHAREHOLDER_REPEAT_BUYBACK_CANCEL",
-  "SHAREHOLDER_FIRST_DIVIDEND",
-  "SHAREHOLDER_DIVIDEND_HIGH",
   "SHAREHOLDER_BUYBACK_ONLY",
   "EARNINGS_LOSS_TO_PROFIT_NO_HISTORY",
+  "EARNINGS_LOSS_TO_PROFIT_1Q",
+  "EARNINGS_LOSS_TO_PROFIT_3Q",
   "EARNINGS_REVENUE_INCREASE",
-  "MA_OVERSEAS_LISTING",
   "MA_MERGER",
-  "MA_EQUITY_ACQUISITION",
   "CAPITAL_RAISING_THIRD_PARTY_CONGLO",
   "CAPITAL_RAISING_FREE_INCREASE",
   "CAPITAL_RAISING_PAID_REDUCTION",
   "MA_MAJOR_CHANGE_CONGLO_FIRST",
-  "SHAREHOLDER_DIVIDEND_LOW",
 ]);
 
 export type DisclosureNature = "positive" | "negative" | "neutral";
@@ -228,7 +228,7 @@ export default function DisclosureCard({ item }: DisclosureCardProps) {
           </div>
         ) : (
           <p className="text-xs text-[var(--text-muted)]">
-            점수 {item.dvi_score} — LLM 분석 생략 (80점 이상만 요약)
+            점수 {item.dvi_score} — 60점 이상만 AI 요약 제공
           </p>
         )}
       </div>
@@ -253,10 +253,10 @@ export default function DisclosureCard({ item }: DisclosureCardProps) {
           <ExternalLink size={11} />
           DART 원문 보기
         </a>
-        {!isAdmin && !isTrap && !isPending && item.dvi_score !== null && item.dvi_score < 80 && (
+        {!isAdmin && !isTrap && !isPending && item.dvi_score !== null && item.dvi_score < 60 && (
           <span className="flex items-center gap-1 text-[10px] text-[var(--text-muted)]">
             <Info size={10} />
-            AI 요약 안내
+            AI 요약 미제공
           </span>
         )}
         {!isAdmin && !isTrap && !isPending && item.llm_summary && (

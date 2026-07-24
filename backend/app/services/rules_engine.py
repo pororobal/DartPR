@@ -142,6 +142,13 @@ def _extract_keywords(text: str) -> dict:
 
     flags["rights_offering"] = bool(re.search(r"(주주배정|일반공모)", text))
     flags["free_increase"] = bool(re.search(r"무상증자", text))
+    flags["is_third_party"] = bool(re.search(r"(제3자배정|3자배정)", text))
+    flags["cb_refixing"] = bool(
+        re.search(r"(전환가액\s*조정|리픽싱|전환가액\s*하향)", text)
+    )
+    flags["capital_raise_withdrawn"] = bool(
+        re.search(r"(유상증자\s*철회|공모\s*철회|증자\s*철회)", text)
+    )
 
     # Capital reduction type
     if re.search(r"무상감자", text):
@@ -449,26 +456,31 @@ def _score_capital_raising(keywords: dict, ticker: str = None, supabase=None) ->
     """§5-1 자금조달 scoring."""
     target = keywords.get("third_party_target", "")
 
+    # 유상증자/공모 철회 — 자금조달 실패 = 유동성 위기
+    if keywords.get("capital_raise_withdrawn"):
+        return (3, "CAPITAL_RAISING_WITHDRAWN", "", "")
+
     # 제3자배정
-    if target or keywords.get("third_party_target"):
-        # Check if target is a conglomerate
+    if target or keywords.get("is_third_party"):
+        if not target:
+            # 제3자배정인데 대상자 미공개 → 불확실성
+            return (35, "CAPITAL_RAISING_THIRD_PARTY_UNDISCLOSED", "", "")
         if supabase and _is_conglomerate(target, supabase):
             return (95, "CAPITAL_RAISING_THIRD_PARTY_CONGLO", "", "")
-        # Check if target is a fund/private equity
         if any(k in target for k in ["조합", "투자조합", "사모"]):
             return (20, "CAPITAL_RAISING_THIRD_PARTY_PE", "", "")
-
-        # Check if target is major shareholder/executive
         if any(k in target for k in ["최대주주", "대표이사", "임원"]):
             return (55, "CAPITAL_RAISING_THIRD_PARTY_INSIDER", "", "")
-
-        # General third-party
-        return (55, "CAPITAL_RAISING_THIRD_PARTY_GENERAL", "", "")
+        return (45, "CAPITAL_RAISING_THIRD_PARTY_GENERAL", "", "")
 
     if keywords.get("rights_offering"):
         return (10, "CAPITAL_RAISING_RIGHTS_OFFERING", "", "")
     if keywords.get("free_increase"):
-        return (68, "CAPITAL_RAISING_FREE_INCREASE", "", "")
+        return (72, "CAPITAL_RAISING_FREE_INCREASE", "", "")
+
+    # CB 리픽싱 — 전환가액 하향 조정 = 지속적 희석
+    if keywords.get("cb_refixing"):
+        return (5, "CAPITAL_RAISING_CB_REFIXING", "", "")
 
     # CB / BW
     cb_purpose = keywords.get("cb_purpose", "")
@@ -505,9 +517,9 @@ def _score_biotech(keywords: dict) -> tuple:
     if keywords.get("clinical_hold"):
         return (0, "BIOTECH_CLINICAL_HOLD", "HIGH_RISK_TRAP", "")
 
-    # 임상3상 + 품목허가/NDA → 77
+    # 임상3상 + 품목허가/NDA → 82 (LLM 분석 받을 수 있게 80↑)
     if keywords.get("phase3_nda"):
-        return (77, "BIOTECH_PHASE3_NDA", "", "")
+        return (82, "BIOTECH_PHASE3_NDA", "", "")
 
     # 기술이전
     if keywords.get("tech_transfer"):
@@ -654,12 +666,12 @@ def _score_shareholder_return(keywords: dict, ticker: str = None, supabase=None)
         is_first_buyback = past_cancels < 2
         is_first_dividend = past_dividends == 0
 
-    # 자사주 취득+소각
+    # 자사주 취득+소각 (시장에 자사주 매입+소각 = 긍정)
     if buyback_cancel:
         if is_first_buyback:
-            return (96, "SHAREHOLDER_FIRST_BUYBACK_CANCEL", "", "취득+소각")
+            return (90, "SHAREHOLDER_FIRST_BUYBACK_CANCEL", "", "취득+소각")
         else:
-            return (85, "SHAREHOLDER_REPEAT_BUYBACK_CANCEL", "", "취득+소각")
+            return (82, "SHAREHOLDER_REPEAT_BUYBACK_CANCEL", "", "취득+소각")
 
     # 자사주 취득(소각 미언급)
     if buyback_only:
@@ -671,13 +683,13 @@ def _score_shareholder_return(keywords: dict, ticker: str = None, supabase=None)
             return (45, "SHAREHOLDER_DISPOSAL_STOCK_OPTION", "", "자사주처분")
         return (10, "SHAREHOLDER_DISPOSAL_OPERATING", "", "자사주처분")
 
-    # 배당
+    # 배당 (한국 배당의 주가 영향은 미국보다 약함, 시가배당률 낮음)
     if dividend:
         if is_first_dividend:
-            return (90, "SHAREHOLDER_FIRST_DIVIDEND", "", "최초배당")
+            return (65, "SHAREHOLDER_FIRST_DIVIDEND", "", "최초배당")
         if dividend_rate >= 5:
-            return (72, "SHAREHOLDER_DIVIDEND_HIGH", "", "배당")
-        return (55, "SHAREHOLDER_DIVIDEND_LOW", "", "배당")
+            return (65, "SHAREHOLDER_DIVIDEND_HIGH", "", "배당")
+        return (48, "SHAREHOLDER_DIVIDEND_LOW", "", "배당")
 
     return (30, "SHAREHOLDER_GENERAL", "", "")
 
@@ -712,19 +724,19 @@ def _score_shareholder_ma(keywords: dict, ticker: str = None, supabase=None) -> 
     if keywords.get("block_trade", False):
         return (6, "MA_BLOCK_TRADE", "", "장내매도")
 
-    # 대량보유(5%룰) + 경영참여
+    # 대량보유(5%룰) + 경영참여 — 국장에서 실제 경영권 분쟁까지 가는 경우 드묾
     if keywords.get("bulk_holding_management", False):
-        return (90, "MA_BULK_HOLDING_MANAGEMENT", "", "대량보유")
+        return (65, "MA_BULK_HOLDING_MANAGEMENT", "", "대량보유")
 
-    # 대량보유 + 단순투자
+    # 대량보유 + 단순투자 — 거의 노이즈, 매일 수건씩 나옴
     if keywords.get("bulk_holding_investment", False):
-        return (50, "MA_BULK_HOLDING_INVESTMENT", "", "대량보유")
+        return (12, "MA_BULK_HOLDING_INVESTMENT", "", "대량보유")
 
-    # 타법인지분양수 + 시너지/신규사업
+    # 타법인지분양수 — 뭘 샀는지에 따라 천차만별, 기본은 중립
     if keywords.get("equity_acquisition", False):
-        return (72, "MA_EQUITY_ACQUISITION", "", "지분양수")
+        return (55, "MA_EQUITY_ACQUISITION", "", "지분양수")
 
-    # 물적분할 + 상장언급
+    # 물적분할 + 상장언급 — 카카오·LG 사례: 자회사 상장 = 주주가치 훼손
     if keywords.get("split_with_listing", False):
         return (3, "MA_SPLIT_WITH_LISTING", "", "물적분할")
 
@@ -732,9 +744,9 @@ def _score_shareholder_ma(keywords: dict, ticker: str = None, supabase=None) -> 
     if keywords.get("merger", False):
         return (77, "MA_MERGER", "", "합병")
 
-    # 해외증시/ADR 상장
+    # 해외증시/ADR 상장 — 과거엔 호재, 요즘은 ADR 상장 자체로 주가 변동 거의 없음
     if keywords.get("overseas_listing", False):
-        return (96, "MA_OVERSEAS_LISTING", "", "해외상장")
+        return (60, "MA_OVERSEAS_LISTING", "", "해외상장")
 
     return (30, "MA_GENERAL", "", "")
 
@@ -826,9 +838,10 @@ def evaluate_disclosure(
             momentum_authenticity="LOW",
         )
 
-    # Step 5: Determine visibility + LLM
-    is_feed_visible = score >= 80
-    skip_llm = score < 80  # Only run LLM for 80+
+    # Step 5: Determine visibility + LLM (layered by score)
+    is_feed_visible = score >= 60
+    skip_llm = score < 60     # No AI analysis
+    # LLM: 80+ full summary, 60-79 short summary (handled by caller)
 
     return ScoreResult(
         category=category,
