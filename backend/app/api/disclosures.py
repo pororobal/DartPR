@@ -43,16 +43,7 @@ def _row_to_response(row: dict) -> dict:
     }
 
 
-# 리스트 조회용 — llm_summary 제외 (각 카드의 상세보기에서만 로드)
-_SELECT_COLS_LIST = (
-    "id,dart_rcept_no,ticker,company_name,title,published_at,"
-    "category,sub_type,sub_rule_id,dvi_score,impact_level,risk_flag,"
-    "is_feed_visible,deceptive_pattern_detected,momentum_authenticity,"
-    "key_metrics,llm_status,created_at"
-)
-
-# 단일 건 상세 조회용 — llm_summary 포함
-_SELECT_COLS_DETAIL = (
+_SELECT_COLS = (
     "id,dart_rcept_no,ticker,company_name,title,published_at,"
     "category,sub_type,sub_rule_id,dvi_score,impact_level,risk_flag,"
     "is_feed_visible,deceptive_pattern_detected,momentum_authenticity,"
@@ -145,7 +136,7 @@ async def get_live_feed(
     supabase = get_supabase()
     query = (
         supabase.table("disclosures")
-        .select(_SELECT_COLS_LIST)
+        .select(_SELECT_COLS)
         .eq("is_feed_visible", True)
         .order("published_at", desc=True)
         .limit(limit)
@@ -185,7 +176,7 @@ async def get_history(
     Supports: ticker, company_name, category, score range, date range, risk_flag.
     """
     supabase = get_supabase()
-    query = supabase.table("disclosures").select(_SELECT_COLS_LIST, count="exact")
+    query = supabase.table("disclosures").select(_SELECT_COLS, count="exact")
 
     if ticker:
         query = query.ilike("ticker", f"%{ticker}%")
