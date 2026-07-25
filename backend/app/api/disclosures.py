@@ -1,6 +1,7 @@
 """Disclosure endpoints — live feed (auth+delay) + history (full filters)."""
 
 import logging
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -15,6 +16,27 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["disclosures"])
 
 DART_BASE_URL = "https://dart.fss.or.kr/dsaf001/main.do?rcpNo="
+
+# ─── Company-name normalisation ─────────────────────────────────
+
+_CORP_SUFFIX_RE = re.compile(
+    r"(?:\(주\)|㈜|주식회사|\(株\)|\(유\)|\(영\)|\(자\)|Co\.,?\s*Ltd\.?|株式会社)\s*$"
+)
+
+
+def _normalise_corp_name(raw: str) -> str:
+    """Strip corporate suffixes so '삼성전자(주)' → '삼성전자' for grouping."""
+    name = raw.strip()
+    name = _CORP_SUFFIX_RE.sub("", name).strip()
+    return name
+
+
+def _cleanest_name(candidates: list[str]) -> str:
+    """Pick the shortest non-empty candidate as the display name."""
+    cleaned = [n.strip() for n in candidates if n.strip()]
+    if not cleaned:
+        return ""
+    return min(cleaned, key=len)
 
 
 def _row_to_response(row: dict) -> dict:
@@ -179,19 +201,20 @@ async def company_suggest(
         .execute()
     )
 
-    seen: set[tuple[str, str]] = set()
-    suggestions: list[dict[str, str]] = []
+    # Group by normalised name + ticker, keep the shortest variant as display name
+    groups: dict[tuple[str, str], list[str]] = {}
     for row in result.data or []:
-        name = (row.get("company_name") or "").strip()
+        raw_name = (row.get("company_name") or "").strip()
         ticker = (row.get("ticker") or "").strip()
-        key = (name, ticker)
-        if not name:
+        if not raw_name:
             continue
-        if key in seen:
-            continue
-        seen.add(key)
-        suggestions.append({"company_name": name, "ticker": ticker})
+        key = (_normalise_corp_name(raw_name), ticker)
+        groups.setdefault(key, []).append(raw_name)
 
+    suggestions = [
+        {"company_name": _cleanest_name(variants), "ticker": ticker}
+        for (norm, ticker), variants in groups.items()
+    ]
     suggestions.sort(key=lambda x: x["company_name"])
     return {"suggestions": suggestions[:10]}
 
