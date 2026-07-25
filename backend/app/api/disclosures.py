@@ -368,30 +368,33 @@ async def trigger_llm_analysis(
     # Determine brief vs full analysis
     brief = score < 80
     
-    try:
-        llm_result = await analyze_disclosure(
-            ticker=ticker,
-            company_name=corp_name,
-            title=title,
-            raw_text=raw_text,
-            brief=brief,
+    llm_result = await analyze_disclosure(
+        ticker=ticker,
+        company_name=corp_name,
+        title=title,
+        raw_text=raw_text,
+        brief=brief,
+    )
+    
+    # Groq 내부에서 실패 시 "LLM 분석 실패" fallback 반환 — 저장하지 않고 에러 처리
+    if llm_result.llm_summary == "LLM 분석 실패":
+        logger.error(f"LLM analysis failed for {disclosure_id}: fallback triggered")
+        raise HTTPException(
+            status_code=502,
+            detail="LLM analysis failed — Groq API error or rate limit",
         )
-        
-        # Update database
-        update_data = {
-            "llm_summary": llm_result.llm_summary[:8000],
-            "key_metrics": [m.model_dump() for m in llm_result.key_metrics],
-            "llm_raw_response": llm_result.model_dump(),
-            "llm_status": "DONE",
-        }
-        
-        supabase.table("disclosures").update(update_data).eq(
-            "id", disclosure_id
-        ).execute()
-        
-        logger.info(f"Manual LLM analysis triggered for {disclosure_id}")
-        return {"message": "LLM analysis completed", "summary": llm_result.llm_summary[:200]}
-        
-    except Exception as e:
-        logger.error(f"Manual LLM analysis failed for {disclosure_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"LLM analysis failed: {str(e)}")
+    
+    # Update database
+    update_data = {
+        "llm_summary": llm_result.llm_summary[:8000],
+        "key_metrics": [m.model_dump() for m in llm_result.key_metrics],
+        "llm_raw_response": llm_result.model_dump(),
+        "llm_status": "DONE",
+    }
+    
+    supabase.table("disclosures").update(update_data).eq(
+        "id", disclosure_id
+    ).execute()
+    
+    logger.info(f"Manual LLM analysis triggered for {disclosure_id}")
+    return {"message": "LLM analysis completed", "summary": llm_result.llm_summary[:200]}
