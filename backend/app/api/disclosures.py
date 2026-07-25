@@ -65,7 +65,7 @@ _SELECT_COLS_DETAIL = (
 # ---------------------------------------------------------------------------
 
 async def _resolve_user_from_token(authorization: str = Header(None)) -> Optional[dict]:
-    """If the request carries a valid Supabase JWT, return user info. Else None."""
+    """If the request carries a valid Supabase JWT, return user info with plan. Else None."""
     if not authorization:
         return None
     try:
@@ -77,6 +77,19 @@ async def _resolve_user_from_token(authorization: str = Header(None)) -> Optiona
             algorithms=[settings.jwt_algorithm],
             options={"verify_aud": False},
         )
+        # JWT payload has sub, email but NOT plan — query users table for plan
+        email = payload.get("email", "")
+        if email:
+            supabase = get_supabase()
+            user_row = (
+                supabase.table("users")
+                .select("id, plan, api_key")
+                .eq("email", email)
+                .maybe_single()
+                .execute()
+            )
+            if user_row.data:
+                return user_row.data
         return payload
     except Exception:
         return None
