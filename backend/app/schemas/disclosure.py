@@ -28,6 +28,10 @@ class DisclosureResponse(BaseModel):
     is_feed_visible: Optional[bool] = None
     deceptive_pattern_detected: Optional[bool] = None
     momentum_authenticity: Optional[str] = None
+    signal_horizon: Optional[str] = None
+    cerebras_sentiment: Optional[str] = None
+    cerebras_confidence: Optional[str] = None
+    cerebras_reason: Optional[str] = None
     llm_summary: Optional[str] = None
     key_metrics: Optional[List[KeyMetricItem]] = None
     llm_status: str = "PENDING"

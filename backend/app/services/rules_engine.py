@@ -61,6 +61,8 @@ class ScoreResult:
     skip_llm: bool = False
     deceptive_pattern_detected: Optional[bool] = None
     momentum_authenticity: str = "MEDIUM"
+    signal_horizon: str = ""
+    needs_cerebras: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -1112,13 +1114,120 @@ def _score_shareholder_ma(keywords: dict, ticker: str = None, supabase=None) -> 
 # ---------------------------------------------------------------------------
 
 def _impact_level_from_score(score: int) -> str:
-    """Map DVI score to impact_level values matching DB constraint (HIGH_IMPACT, NORMAL, LOW_IMPACT)."""
     if score >= 90:
         return "HIGH_IMPACT"
     elif score >= 40:
         return "NORMAL"
     else:
         return "LOW_IMPACT"
+
+
+# ---------------------------------------------------------------------------
+# Signal horizon: 단기(days~weeks) vs 장기(months~years)
+# ---------------------------------------------------------------------------
+
+_SHORT_TERM_RULES = {
+    "EARNINGS_LOSS_TO_PROFIT_NO_HISTORY", "EARNINGS_LOSS_TO_PROFIT_1Q",
+    "EARNINGS_LOSS_TO_PROFIT_3Q", "EARNINGS_PROFIT_TO_LOSS_NO_HISTORY",
+    "EARNINGS_PROFIT_TO_LOSS_1Q", "EARNINGS_PROFIT_TO_LOSS_3Q",
+    "EARNINGS_LOSS_CONTINUED", "EARNINGS_LOSS_CONTINUED_4Q",
+    "EARNINGS_REVENUE_INCREASE", "EARNINGS_REVENUE_DECREASE",
+    "EARNINGS_OP_PROFIT_IMPROVING", "EARNINGS_OP_PROFIT_WORSENING",
+    "EARNINGS_AUDIT_UNQUALIFIED", "EARNINGS_LOSS_TO_PROFIT_NON_OP",
+    "BUSINESS_CONTRACT_TERMINATED", "BUSINESS_CONTRACT_MODIFIED",
+    "MA_BLOCK_TRADE", "MA_BULK_HOLDING_MANAGEMENT",
+    "MA_BULK_HOLDING_INVESTMENT", "MA_MAJOR_CHANGE_NEWLY_FORMED",
+    "CAPITAL_RAISING_CB_CONVERTED", "CAPITAL_RAISING_WARRANT_EXERCISED",
+    "CAPITAL_RAISING_CB_REFIXING", "CAPITAL_RAISING_WITHDRAWN",
+    "CAPITAL_RAISING_DELAYED_PAYMENT", "CAPITAL_RAISING_FREE_INCREASE",
+    "CAPITAL_RAISING_FREE_REDUCTION", "CAPITAL_RAISING_PAID_REDUCTION",
+    "CAPITAL_RAISING_CB_EARLY_REDEEM", "CAPITAL_RAISING_CB_PRICE_UP",
+    "RISK_GOING_CONCERN", "RISK_CAPITAL_IMPAIRMENT",
+    "RISK_MANAGEMENT_ISSUE", "RISK_LISTING_REVIEW",
+    "RISK_MARKET_WARNING_DANGER", "RISK_MARKET_WARNING_CAUTION",
+    "RISK_MARKET_WARNING_ATTENTION",
+    "SHAREHOLDER_FIRST_BUYBACK_CANCEL", "SHAREHOLDER_REPEAT_BUYBACK_CANCEL",
+    "SHAREHOLDER_BUYBACK_ONLY", "SHAREHOLDER_OPEN_MARKET_BUYBACK",
+    "SHAREHOLDER_DISPOSAL_OPERATING", "SHAREHOLDER_DISPOSAL_STOCK_OPTION",
+    "SHAREHOLDER_TREASURY_COLLATERAL", "SHAREHOLDER_MAJOR_PLEDGE",
+    "SHAREHOLDER_FIRST_DIVIDEND", "SHAREHOLDER_DIVIDEND_HIGH",
+    "SHAREHOLDER_DIVIDEND_LOW", "SHAREHOLDER_STOCK_DIVIDEND",
+    "BIOTECH_CLINICAL_HOLD", "BIOTECH_TECH_RETURN",
+}
+
+_LONG_TERM_RULES = {
+    "BIOTECH_FDA_APPROVAL", "BIOTECH_TECH_TRANSFER_AMOUNT",
+    "BIOTECH_TECH_TRANSFER_NO_AMOUNT", "BIOTECH_PHASE3_NDA",
+    "MA_MAJOR_CHANGE_GENERAL", "MA_MAJOR_CHANGE_CONGLO_FIRST",
+    "MA_MAJOR_CHANGE_CONGLO_REPEAT", "MA_MERGER",
+    "MA_BUSINESS_TRANSFER", "MA_SHARE_EXCHANGE",
+    "MA_OVERSEAS_LISTING", "MA_ACTIVIST",
+    "CAPITAL_RAISING_THIRD_PARTY_CONGLO",
+    "CAPITAL_RAISING_THIRD_PARTY_GENERAL",
+    "CAPITAL_RAISING_THIRD_PARTY_INSIDER",
+    "CAPITAL_RAISING_THIRD_PARTY_PE",
+    "CAPITAL_RAISING_THIRD_PARTY_UNDISCLOSED",
+    "CAPITAL_RAISING_CB_FACILITY", "CAPITAL_RAISING_CB_WORKING",
+    "MA_EQUITY_ACQUISITION",
+}
+
+
+def _assign_signal_horizon(sub_rule_id: str, category: str) -> str:
+    if sub_rule_id in _SHORT_TERM_RULES:
+        return "SHORT_TERM"
+    if sub_rule_id in _LONG_TERM_RULES:
+        return "LONG_TERM"
+    if category == "BUSINESS_CONTRACT":
+        return "SHORT_TERM"
+    if category == "EARNINGS":
+        return "SHORT_TERM"
+    if category == "CAPITAL_RAISING":
+        return "SHORT_TERM"
+    return ""
+
+
+# ---------------------------------------------------------------------------
+# Ambiguous titles — keyword matching alone is insufficient
+# These need Cerebras LLM analysis to determine actual sentiment
+# ---------------------------------------------------------------------------
+
+_AMBIGUOUS_TITLE_PATTERNS = [
+    r"신규시설\s*투자",
+    r"시설투자",
+    r"생산시설.*증설",
+    r"풍문또는보도에\s*대한\s*해명",
+    r"풍문.*해명",
+    r"보도에\s*대한\s*해명",
+    r"조회공시\s*답변",
+    r"조회공시\s*확정",
+    r"조회공시\s*부인",
+    r"증권신고서",
+    r"투자설명서",
+    r"소액공모",
+    r"일괄신고",
+    r"첨부정정",
+    r"정정조건부",
+    r"자율공시",
+    r"채무보증",
+    r"담보제공",
+    r"채무인수",
+    r"대표이사\s*변경",
+    r"감사인\s*변경",
+    r"사업목적\s*추가",
+    r"사업목적\s*변경",
+    r"상호변경",
+    r"지배구조",
+    r"기업지배구조",
+]
+
+
+def _is_ambiguous_title(title: str) -> bool:
+    t = title.replace(" ", "")
+    for pattern in _AMBIGUOUS_TITLE_PATTERNS:
+        stripped = pattern.replace(r"\s*", "")
+        if stripped in t:
+            return True
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -1145,9 +1254,9 @@ def evaluate_disclosure(
             impact_level="LOW_IMPACT",
             is_feed_visible=False,
             skip_llm=True,
+            signal_horizon="",
         )
 
-    # Step 2: Hard-fail check
     hard_fail = check_hard_fail(raw_text)
     if hard_fail.detected:
         return ScoreResult(
@@ -1160,6 +1269,7 @@ def evaluate_disclosure(
             skip_llm=True,
             deceptive_pattern_detected=True,
             momentum_authenticity="LOW",
+            signal_horizon="SHORT_TERM",
         )
 
     # Step 3: Category guess + keyword extraction
@@ -1176,6 +1286,7 @@ def evaluate_disclosure(
             risk_flag="CLEAN",
             is_feed_visible=True,
             skip_llm=True,
+            signal_horizon="SHORT_TERM",
         )
     if keywords.get("capital_impairment"):
         return ScoreResult(
@@ -1186,6 +1297,7 @@ def evaluate_disclosure(
             risk_flag="CLEAN",
             is_feed_visible=True,
             skip_llm=True,
+            signal_horizon="SHORT_TERM",
         )
     if keywords.get("management_issue") or keywords.get("caution_stock"):
         return ScoreResult(
@@ -1195,6 +1307,7 @@ def evaluate_disclosure(
             impact_level="HIGH_IMPACT",
             is_feed_visible=True,
             skip_llm=True,
+            signal_horizon="SHORT_TERM",
         )
     if keywords.get("listing_review"):
         return ScoreResult(
@@ -1204,6 +1317,7 @@ def evaluate_disclosure(
             impact_level="HIGH_IMPACT",
             is_feed_visible=True,
             skip_llm=True,
+            signal_horizon="SHORT_TERM",
         )
 
     # 시장경보 early return
@@ -1215,6 +1329,7 @@ def evaluate_disclosure(
             impact_level="HIGH_IMPACT",
             is_feed_visible=True,
             skip_llm=True,
+            signal_horizon="SHORT_TERM",
         )
     if keywords.get("market_warning_caution", False):
         return ScoreResult(
@@ -1224,6 +1339,7 @@ def evaluate_disclosure(
             impact_level="HIGH_IMPACT",
             is_feed_visible=True,
             skip_llm=True,
+            signal_horizon="SHORT_TERM",
         )
     if keywords.get("market_warning_attention", False) or keywords.get("overheated_stock", False):
         return ScoreResult(
@@ -1233,6 +1349,7 @@ def evaluate_disclosure(
             impact_level="HIGH_IMPACT",
             is_feed_visible=True,
             skip_llm=True,
+            signal_horizon="SHORT_TERM",
         )
 
     # 자율공시 보너스 — 자발적 공시 = 경영 자신감 신호
@@ -1269,12 +1386,16 @@ def evaluate_disclosure(
             skip_llm=True,
             deceptive_pattern_detected=True,
             momentum_authenticity="LOW",
+            signal_horizon="SHORT_TERM",
         )
 
     # Step 5: Determine visibility + LLM (layered by score)
     is_feed_visible = score >= 60
     skip_llm = score < 60     # No AI analysis
     # LLM: 80+ full summary, 60-79 short summary (handled by caller)
+
+    horizon = _assign_signal_horizon(sub_id, category)
+    ambiguous = _is_ambiguous_title(title) and category in ("OTHER", "ADMINISTRATIVE")
 
     return ScoreResult(
         category=category,
@@ -1285,6 +1406,8 @@ def evaluate_disclosure(
         risk_flag=risk_flag or "CLEAN",
         is_feed_visible=is_feed_visible,
         skip_llm=skip_llm,
+        signal_horizon=horizon,
+        needs_cerebras=ambiguous,
     )
 
 

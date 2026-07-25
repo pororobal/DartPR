@@ -288,6 +288,7 @@ async def _process_disclosure(item: dict, skip_document: bool = False):
         "is_feed_visible": score_result.is_feed_visible,
         "deceptive_pattern_detected": score_result.deceptive_pattern_detected,
         "momentum_authenticity": score_result.momentum_authenticity,
+        "signal_horizon": score_result.signal_horizon,
         "llm_status": "DONE" if score_result.skip_llm else "PENDING",
     })
 
@@ -307,11 +308,15 @@ async def _process_disclosure(item: dict, skip_document: bool = False):
         logger.error(f"Supabase insert failed for {rcept_no}: {e}")
         return
 
-    # LLM enrichment: 80+ full analysis, 60-79 brief summary, <60 skip
     if not score_result.skip_llm:
         brief = score_result.dvi_score < 80
         asyncio.create_task(
             _enrich_with_llm(rcept_no, ticker, corp_name, title, raw_text, brief=brief)
+        )
+
+    if score_result.needs_cerebras:
+        asyncio.create_task(
+            _enrich_with_cerebras(rcept_no, ticker, corp_name, title, raw_text)
         )
 
 
@@ -363,6 +368,52 @@ async def _enrich_with_llm(
             }).eq("dart_rcept_no", rcept_no).execute()
         except Exception:
             pass
+
+
+async def _enrich_with_cerebras(
+    rcept_no: str,
+    ticker: str,
+    corp_name: str,
+    title: str,
+    raw_text: str,
+):
+    try:
+        from app.services.cerebras_llm import analyze_ambiguity
+
+        result = await analyze_ambiguity(
+            ticker=ticker,
+            company_name=corp_name,
+            title=title,
+            raw_text=raw_text,
+        )
+
+        horizon_map = {"SHORT_TERM": "SHORT_TERM", "LONG_TERM": "LONG_TERM"}
+        horizon = horizon_map.get(result.horizon, "SHORT_TERM")
+
+        sentiment_map = {"POSITIVE": "positive", "NEGATIVE": "negative", "NEUTRAL": "neutral"}
+        sentiment = sentiment_map.get(result.sentiment, "neutral")
+
+        update_data = _clean_payload({
+            "signal_horizon": horizon,
+            "cerebras_sentiment": sentiment,
+            "cerebras_confidence": result.confidence,
+            "cerebras_reason": result.reason[:500],
+        })
+
+        supabase = get_supabase()
+        supabase.table("disclosures").update(update_data).eq(
+            "dart_rcept_no", rcept_no
+        ).execute()
+
+        logger.info(
+            f"Cerebras enrichment done for {rcept_no}: "
+            f"sentiment={result.sentiment} horizon={result.horizon}"
+        )
+
+    except Exception as e:
+        logger.error(
+            f"Cerebras enrichment failed for {rcept_no}: {e}", exc_info=True
+        )
 
 
 # ---------------------------------------------------------------------------

@@ -95,7 +95,7 @@ const SUB_RULE_DESC: Record<string, string> = {
   "MA_MAJOR_CHANGE_CONGLO_FIRST":         "대기업 계열사로 최대주주 변경 — 재무 안정성 및 사업 시너지 기대",
 };
 
-type Signal = { icon: string; label: string; color: string; bg: string };
+type Signal = { icon: string; label: string; color: string; bg: string; horizon?: string };
 
 const _NEGATIVE_RULES = new Set([
   "MA_MANAGEMENT_DISPUTE",
@@ -171,8 +171,13 @@ export function getNature(item: DisclosureItem): DisclosureNature {
   const sid = item.sub_rule_id || "";
   if (_NEGATIVE_RULES.has(sid)) return "negative";
   if (_POSITIVE_RULES.has(sid)) return "positive";
-  if (item.risk_flag === "HIGH_RISK_TRAP") return "negative";
+  if (item.risk_flag && item.risk_flag !== "CLEAN") return "negative";
   if (item.category === "DELISTING_RISK") return "negative";
+
+  if (item.cerebras_sentiment) {
+    return item.cerebras_sentiment as DisclosureNature;
+  }
+
   if (item.category === "ADMINISTRATIVE") return "neutral";
 
   if (item.category === "BUSINESS_CONTRACT" && (item.dvi_score ?? 0) >= 50)
@@ -188,6 +193,7 @@ function getSignal(item: DisclosureItem): Signal {
   const isTrap = item.risk_flag === "HIGH_RISK_TRAP";
   const s = item.dvi_score ?? 0;
   const nature = getNature(item);
+  const horizon = item.signal_horizon || "";
 
   if (item.category === "ADMINISTRATIVE")
     return { icon: "⚪", label: "행정 공시", color: "text-gray-400", bg: "bg-gray-800/40" };
@@ -195,14 +201,20 @@ function getSignal(item: DisclosureItem): Signal {
   if (isTrap || s === 0)
     return { icon: "🔴", label: "위험", color: "text-red-400", bg: "bg-red-900/20" };
 
-  if (nature === "positive" && s >= 90)
-    return { icon: "🟢", label: "호재", color: "text-green-400", bg: "bg-green-900/20" };
+  if (nature === "positive" && s >= 90) {
+    const prefix = horizon === "LONG_TERM" ? "장기 " : horizon === "SHORT_TERM" ? "단기 " : "";
+    return { icon: "🟢", label: `${prefix}호재`, color: "text-green-400", bg: "bg-green-900/20", horizon };
+  }
 
-  if (nature === "positive" && s >= 70)
-    return { icon: "🟡", label: "긍정", color: "text-yellow-400", bg: "bg-yellow-900/20" };
+  if (nature === "positive" && s >= 70) {
+    const prefix = horizon === "LONG_TERM" ? "장기 " : horizon === "SHORT_TERM" ? "단기 " : "";
+    return { icon: "🟡", label: `${prefix}긍정`, color: "text-yellow-400", bg: "bg-yellow-900/20", horizon };
+  }
 
-  if (nature === "negative")
-    return { icon: "🔴", label: "악재", color: "text-red-400", bg: "bg-red-900/20" };
+  if (nature === "negative") {
+    const prefix = horizon === "LONG_TERM" ? "장기 " : horizon === "SHORT_TERM" ? "단기 " : "";
+    return { icon: "🔴", label: `${prefix}악재`, color: "text-red-400", bg: "bg-red-900/20", horizon };
+  }
 
   if (s >= 40)
     return { icon: "⚪", label: "중립", color: "text-gray-400", bg: "bg-gray-800/40" };
@@ -264,6 +276,7 @@ function MetricCard({ label, value, status }: { label: string; value: string; st
 
 export default function DisclosureCard({ item, isAdmin = false }: DisclosureCardProps) {
   const [analyzing, setAnalyzing] = useState(false);
+  const [analyzeError, setAnalyzeError] = useState<string | null>(null);
   const cat = item.category ? categoryChip[item.category] : null;
   const signal = getSignal(item);
   const cleanTitle = item.title?.replace(/\s+/g, " ").trim() || "";
@@ -271,19 +284,21 @@ export default function DisclosureCard({ item, isAdmin = false }: DisclosureCard
     month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
   });
   const isPending = item.llm_status === "PENDING" && !item.llm_summary;
-  const isTrap = item.risk_flag === "HIGH_RISK_TRAP";
+  const isTrap = item.risk_flag !== "CLEAN";
   const isAdministrative = item.category === "ADMINISTRATIVE";
+
+  const [analyzeError, setAnalyzeError] = useState<string | null>(null);
 
   const handleAnalyze = async () => {
     if (!item.id) return;
     setAnalyzing(true);
+    setAnalyzeError(null);
     try {
       await disclosures.analyze(item.id);
-      // Reload page to show updated data
       window.location.reload();
     } catch (e) {
       console.error("LLM analysis failed:", e);
-      alert("LLM 분석에 실패했습니다");
+      setAnalyzeError("LLM 분석에 실패했습니다");
     } finally {
       setAnalyzing(false);
     }
@@ -368,12 +383,35 @@ export default function DisclosureCard({ item, isAdmin = false }: DisclosureCard
         )}
       </div>
 
+      {/* ── Row 3b: Cerebras Insight (ambiguous disclosures) ── */}
+      {item.cerebras_sentiment && item.cerebras_reason && (
+        <div className="mt-2 bg-purple-900/10 border border-purple-500/20 rounded-lg p-3">
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <span className="text-[10px] font-bold text-purple-400 tracking-wider uppercase">🤖 AI 모호 공시 분석</span>
+            {item.cerebras_confidence && (
+              <span className="text-[10px] text-purple-400/60">· 신뢰도 {item.cerebras_confidence}</span>
+            )}
+          </div>
+          <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+            {item.cerebras_reason}
+          </p>
+        </div>
+      )}
+
       {/* ── Row 4: Key Metrics Grid ──────────────────────── */}
       {item.key_metrics && item.key_metrics.length > 0 && !isAdministrative && (
         <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
           {item.key_metrics.map((m, i) => (
             <MetricCard key={i} label={m.label} value={m.value} status={m.status} />
           ))}
+        </div>
+      )}
+
+      {/* ── Error toast ──────────────────────────────────── */}
+      {analyzeError && (
+        <div className="mt-2 bg-red-900/20 border border-red-500/30 rounded-lg px-3 py-2 text-xs text-red-400 flex items-center justify-between">
+          <span>{analyzeError}</span>
+          <button onClick={() => setAnalyzeError(null)} className="text-red-400/60 hover:text-red-300 ml-2">✕</button>
         </div>
       )}
 

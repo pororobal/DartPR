@@ -58,6 +58,10 @@ def _row_to_response(row: dict) -> dict:
         "is_feed_visible": row.get("is_feed_visible"),
         "deceptive_pattern_detected": row.get("deceptive_pattern_detected"),
         "momentum_authenticity": row.get("momentum_authenticity"),
+        "signal_horizon": row.get("signal_horizon"),
+        "cerebras_sentiment": row.get("cerebras_sentiment"),
+        "cerebras_confidence": row.get("cerebras_confidence"),
+        "cerebras_reason": row.get("cerebras_reason"),
         "llm_summary": row.get("llm_summary"),
         "key_metrics": row.get("key_metrics"),
         "llm_status": row.get("llm_status", "PENDING"),
@@ -69,6 +73,7 @@ _SELECT_COLS = (
     "id,dart_rcept_no,ticker,company_name,title,published_at,"
     "category,sub_type,sub_rule_id,dvi_score,impact_level,risk_flag,"
     "is_feed_visible,deceptive_pattern_detected,momentum_authenticity,"
+    "signal_horizon,cerebras_sentiment,cerebras_confidence,cerebras_reason,"
     "llm_summary,key_metrics,llm_status,created_at"
 )
 
@@ -202,6 +207,7 @@ async def company_suggest(
     )
 
     # Group by normalised name ONLY (not ticker), pick the most common ticker.
+    # Sort by disclosure count (most searched → first), then alphabetically.
     groups: dict[str, dict] = {}
     for row in result.data or []:
         raw_name = (row.get("company_name") or "").strip()
@@ -210,8 +216,9 @@ async def company_suggest(
             continue
         norm = _normalise_corp_name(raw_name)
         if norm not in groups:
-            groups[norm] = {"variants": [], "ticker_counts": {}}
+            groups[norm] = {"variants": [], "ticker_counts": {}, "count": 0}
         groups[norm]["variants"].append(raw_name)
+        groups[norm]["count"] += 1
         groups[norm]["ticker_counts"][ticker] = groups[norm]["ticker_counts"].get(ticker, 0) + 1
 
     suggestions = []
@@ -221,7 +228,7 @@ async def company_suggest(
             "company_name": _cleanest_name(data["variants"]),
             "ticker": best_ticker,
         })
-    suggestions.sort(key=lambda x: x["company_name"])
+    suggestions.sort(key=lambda x: (-groups[_normalise_corp_name(x["company_name"])]["count"], x["company_name"]))
     return {"suggestions": suggestions[:10]}
 
 

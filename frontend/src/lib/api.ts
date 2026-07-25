@@ -33,7 +33,7 @@ async function apiFetch<T>(path: string, options: FetchOptions = {}): Promise<T>
   });
 
   if (!res.ok) {
-    const errorBody = await res.text();
+    const errorBody = (await res.text()).slice(0, 500);
     throw new Error(`API ${res.status}: ${errorBody}`);
   }
 
@@ -105,6 +105,10 @@ export interface DisclosureItem {
   is_feed_visible: boolean | null;
   deceptive_pattern_detected: boolean | null;
   momentum_authenticity: string | null;
+  signal_horizon: string | null;
+  cerebras_sentiment: string | null;
+  cerebras_confidence: string | null;
+  cerebras_reason: string | null;
   llm_summary: string | null;
   key_metrics: KeyMetric[] | null;
   llm_status: string;
