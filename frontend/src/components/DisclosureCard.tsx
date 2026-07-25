@@ -23,6 +23,78 @@ const categoryChip: Record<string, { label: string; color: string }> = {
 
 // ─── Signal helpers ───────────────────────────────────────────
 
+// sub_rule_id → 사람이 읽을 수 있는 설명 (악재/호재 이유)
+const SUB_RULE_DESC: Record<string, string> = {
+  // ── NEGATIVE ──
+  "MA_MANAGEMENT_DISPUTE":                "경영권 분쟁 — 의사결정 지연 및 주주가치 훼손 우려",
+  "MA_MAJOR_CHANGE_NEWLY_FORMED":         "설립 1년 미만 법인으로 최대주주 변경 — 불확실성 높음",
+  "MA_BLOCK_TRADE":                       "최대주주 장내매도 — 오버행 부담",
+  "BIOTECH_CLINICAL_HOLD":               "임상 중지 — 바이오 기대가치 하락",
+  "BIOTECH_TECH_RETURN":                  "기술반환/라이선스 해지 — 기술가치 훼손",
+  "CAPITAL_RAISING_FREE_REDUCTION":       "무상감자 — 주식 수 감소로 주가 상승 부담",
+  "BUSINESS_CONTRACT_TERMINATED":         "공급계약 해지 — 매출 차질",
+  "BUSINESS_CONTRACT_MODIFIED":           "공급계약 변경/감액 — 계약 조건 악화",
+  "EARNINGS_PROFIT_TO_LOSS_NO_HISTORY":   "적자전환 — 수익성 구조 악화",
+  "EARNINGS_REVENUE_DECREASE":            "매출 감소 — 외형 축소",
+  "EARNINGS_LOSS_CONTINUED":              "적자 지속 — 수익성 개선 없음",
+  "SHAREHOLDER_DISPOSAL_OPERATING":       "자사주 처분 — 오버행 부담 및 주가 하방 압력",
+  "SHAREHOLDER_DISPOSAL_STOCK_OPTION":    "자사주 처분(스톡옵션) — 희석 부담",
+  "MA_SPLIT_WITH_LISTING":               "물적분할 후 자회사 상장 — 주주가치 훼손 우려",
+  "CAPITAL_RAISING_CB_WORKING":           "운영자금 조달 CB — 자금 사정 좋지 않음",
+  "CAPITAL_RAISING_DELAYED_PAYMENT":      "납입 지연 — 자금 조달 차질",
+  "CAPITAL_RAISING_CB_REFIXING":          "CB 전환가액 하향 조정 — 지속적 희석 리스크",
+  "CAPITAL_RAISING_WITHDRAWN":            "유상증자 철회 — 자금 조달 실패",
+  "CAPITAL_RAISING_CB_CONVERTED":         "CB 전환청구권 행사 — 실제 희석 발생",
+  "CAPITAL_RAISING_WARRANT_EXERCISED":    "신주인수권 행사 — 희석 발생",
+  "SHAREHOLDER_TREASURY_COLLATERAL":      "자사주 담보 제공 — 유동성 위험 신호",
+  "SHAREHOLDER_MAJOR_PLEDGE":             "최대주주 지분 담보 — 대주주 자금 사정 악화",
+  "SHAREHOLDER_STOCK_DIVIDEND":           "주식배당 — 현금 유출 없는 우회 배당",
+  "MA_DEBT_TO_EQUITY":                    "출자전환 — 채무 불이행 리스크",
+  "MA_DEBT_FORGIVENESS":                  "채무 면제/재조정 — 파산 직전 수준",
+  "EARNINGS_LOSS_TO_PROFIT_NON_OP":       "영업외손익으로 흑자전환 — 일회성 요인, 실질적 턴어라운드 아님",
+  "EARNINGS_OP_PROFIT_WORSENING":         "영업이익 악화 — 수익성 추세 하락",
+  "EARNINGS_PROFIT_TO_LOSS_1Q":           "1분기 만에 적자전환 — 실적 급변",
+  "EARNINGS_PROFIT_TO_LOSS_3Q":           "3분기 연속 흑자→적자 — 구조적 실적 악화",
+  "EARNINGS_LOSS_CONTINUED_4Q":           "4분기 연속 적자 — 심각한 수익성 위기",
+  "RISK_GOING_CONCERN":                   "계속기업 불확실성 — 존속 위험",
+  "RISK_CAPITAL_IMPAIRMENT":              "자본잠식 — 재무구조 붕괴 위험",
+  "RISK_MANAGEMENT_ISSUE":                "관리종목 지정 — 상장 유지 위험",
+  "RISK_LISTING_REVIEW":                  "상장적격성 심사 — 상장폐지 위험",
+  "BUSINESS_CONTRACT_NA_PCT":             "공급계약 체결(매출액 대비 비율 미공개) — 중요도 판단 불가",
+
+  // ── POSITIVE ──
+  "BIOTECH_FDA_APPROVAL":                 "FDA/식약처 승인 — 제품 상업화 본격화",
+  "BIOTECH_TECH_TRANSFER_AMOUNT":         "기술이전 계약 체결(규모 공개) — 기술 가치 입증",
+  "BIOTECH_PHASE3_NDA":                   "임상 3상/품목허가 신청 — 규제 승인 목전",
+  "SHAREHOLDER_FIRST_BUYBACK_CANCEL":     "최초 자사주 취득+소각 — 강력한 주주환원 신호",
+  "SHAREHOLDER_REPEAT_BUYBACK_CANCEL":    "반복 자사주 소각 — 지속적인 주주환원 정책",
+  "SHAREHOLDER_BUYBACK_ONLY":             "자사주 취득 — 주가 안정화 의지",
+  "SHAREHOLDER_OPEN_MARKET_BUYBACK":      "자사주 공개매수 — 가장 강력한 주가 부양 신호",
+  "EARNINGS_LOSS_TO_PROFIT_NO_HISTORY":   "흑자전환 — 수익성 개선 신호",
+  "EARNINGS_LOSS_TO_PROFIT_1Q":           "1분기 만에 흑자전환 — 빠른 실적 턴어라운드",
+  "EARNINGS_LOSS_TO_PROFIT_3Q":           "3분기 연속 흑자전환 — 추세적 턴어라운드 확인",
+  "EARNINGS_REVENUE_INCREASE":            "매출 증가 — 외형 성장 지속",
+  "EARNINGS_AUDIT_UNQUALIFIED":           "감사의견 적정 — 회계 투명성 양호",
+  "EARNINGS_OP_PROFIT_IMPROVING":         "영업이익 개선 — 수익성 향상 추세",
+  "MA_MERGER":                            "합병 결정 — 사업 경쟁력 강화 기대",
+  "MA_SHAREHOLDER_PROPOSAL":              "주주제안 — 주주 권리 행사 활성화",
+  "MA_ACTIVIST":                          "행동주의 펀드 등장 — 경영진 견제 및 주주가치 제고 압력",
+  "MA_BUSINESS_TRANSFER":                 "영업양수도 — 사업구조 재편 및 효율화",
+  "MA_SHARE_EXCHANGE":                    "주식교환/이전 — 지배구조 단순화",
+  "MA_MAJOR_CHANGE_GENERAL":              "최대주주 변경 — 새 경영진 기대감",
+  "MA_BULK_HOLDING_MANAGEMENT":           "대량보유(경영참여 목적) — 경영 영향력 행사 신호",
+  "MA_PROXY_FIGHT":                       "위임장 대결 — 경영권 분쟁 격화, 주주 의결권 가치 상승",
+  "MA_EGM_DISPUTE":                       "임시주주총회(분쟁) — 경영권 분쟁 본격화",
+  "MA_OVERSEAS_LISTING":                  "해외증시 상장 추진 — 기업 가치 재평가 기회",
+  "CAPITAL_RAISING_THIRD_PARTY_CONGLO":   "대기업 계열사 대상 3자배정 — 신뢰도 높은 자금 조달",
+  "CAPITAL_RAISING_FREE_INCREASE":        "무상증자 — 주식 수 증가로 유동성 개선",
+  "CAPITAL_RAISING_PAID_REDUCTION":       "유상감자 — 주식 수 감소로 주당 가치 증가",
+  "CAPITAL_RAISING_CB_EARLY_REDEEM":      "CB 조기 상환/만기전 취득 — 재무 부담 감소",
+  "CAPITAL_RAISING_CB_PRICE_UP":          "CB 전환가액 상향 조정 — 희석 우려 완화",
+  "CAPITAL_RAISING_CB_FACILITY":          "CB 발행(시설자금) — 생산 능력 확충 투자",
+  "MA_MAJOR_CHANGE_CONGLO_FIRST":         "대기업 계열사로 최대주주 변경 — 재무 안정성 및 사업 시너지 기대",
+};
+
 type Signal = { icon: string; label: string; color: string; bg: string };
 
 const _NEGATIVE_RULES = new Set([
@@ -138,6 +210,13 @@ function getSignal(item: DisclosureItem): Signal {
   return { icon: "🟠", label: "주의", color: "text-orange-400", bg: "bg-orange-900/20" };
 }
 
+function getSignalDescription(item: DisclosureItem): string | null {
+  if (item.risk_flag === "HIGH_RISK_TRAP") return null;
+  if (item.category === "ADMINISTRATIVE") return null;
+  const sid = item.sub_rule_id || "";
+  return SUB_RULE_DESC[sid] || null;
+}
+
 // ─── Score badge ──────────────────────────────────────────────
 
 function ScoreBadge({ score }: { score: number | null }) {
@@ -250,6 +329,16 @@ export default function DisclosureCard({ item, isAdmin = false }: DisclosureCard
           <span className="text-[var(--text-muted)] font-normal">· {item.sub_type}</span>
         )}
       </div>
+
+      {/* ── Row 2b: Signal Description ───────────────────── */}
+      {(() => {
+        const desc = getSignalDescription(item);
+        return desc ? (
+          <div className="mt-1.5 text-xs text-[var(--text-muted)] leading-relaxed">
+            <span className="font-medium">{signal.icon === "🟢" || signal.icon === "🟡" ? "✓" : "!"}</span> {desc}
+          </div>
+        ) : null;
+      })()}
 
       {/* ── Row 3: AI Summary ────────────────────────────── */}
       <div className="mt-3">
