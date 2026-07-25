@@ -159,21 +159,22 @@ async def get_live_feed(
 
 @router.get("/company-suggest")
 async def company_suggest(
-    q: str = Query(..., min_length=1, max_length=100, description="회사명 부분 검색어 (예: 삼ㅅ → 삼성전자)"),
+    q: str = Query(..., min_length=1, max_length=100, description="회사명/종목코드 부분 검색"),
 ):
     """
-    Autocomplete for company names.
+    Autocomplete for company names and tickers.
 
-    Returns up to 10 distinct (company_name, ticker) pairs matching
-    the partial search term, sorted alphabetically by company_name.
+    Searches both company_name and ticker (OR), deduplicates,
+    and returns up to 10 distinct (company_name, ticker) pairs.
     """
     supabase = get_supabase()
-    # Fetch a generous pool to deduplicate client-side — Supabase-py does not
-    # expose column-level DISTINCT, and 47k+ rows are too many to load all.
+    # Use PostgREST or_ filter to search both columns; Supabase-py does not
+    # expose column-level DISTINCT, so fetch a generous pool and dedup below.
+    or_filter = f"company_name.ilike.%{q}%,ticker.ilike.%{q}%"
     result = (
         supabase.table("disclosures")
         .select("company_name, ticker")
-        .ilike("company_name", f"%{q}%")
+        .or_(or_filter)
         .limit(100)
         .execute()
     )
@@ -197,6 +198,7 @@ async def company_suggest(
 
 @router.get("/history")
 async def get_history(
+    q: Optional[str] = Query(None, description="통합 검색 (회사명+종목코드 OR 부분일치)"),
     ticker: Optional[str] = Query(None, description="종목코드 (부분일치)"),
     company_name: Optional[str] = Query(None, description="회사명 (부분일치)"),
     category: Optional[str] = Query(None, description="카테고리 (정확일치)"),
@@ -211,11 +213,14 @@ async def get_history(
     """
     Public search & filter endpoint for disclosure history.
 
-    Supports: ticker, company_name, category, score range, date range, risk_flag.
+    Supports: q (unified search across ticker+company_name), ticker,
+    company_name, category, score range, date range, risk_flag.
     """
     supabase = get_supabase()
     query = supabase.table("disclosures").select(_SELECT_COLS, count="exact")
 
+    if q:
+        query = query.or_(f"company_name.ilike.%{q}%,ticker.ilike.%{q}%")
     if ticker:
         query = query.ilike("ticker", f"%{ticker}%")
     if company_name:

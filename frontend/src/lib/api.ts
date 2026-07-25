@@ -128,6 +128,7 @@ export const disclosures = {
 
   /** History with full filter support */
   history: (params: {
+    q?: string;
     ticker?: string;
     company_name?: string;
     category?: string;
@@ -141,6 +142,7 @@ export const disclosures = {
   }) => {
     const search = new URLSearchParams();
     const str = (v: unknown) => String(v);
+    if (params.q) search.set("q", params.q);
     if (params.ticker) search.set("ticker", params.ticker);
     if (params.company_name) search.set("company_name", params.company_name);
     if (params.category) search.set("category", params.category);

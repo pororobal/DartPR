@@ -75,8 +75,7 @@ export default function HistoryPage() {
   }, []);
 
   // Filters
-  const [ticker, setTicker] = useState("");
-  const [companyName, setCompanyName] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [category, setCategory] = useState("");
   const [scoreMin, setScoreMin] = useState("");
   const [scoreMax, setScoreMax] = useState("");
@@ -94,12 +93,11 @@ export default function HistoryPage() {
   const suggestRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  const hasActiveFilters = ticker || companyName || category || scoreMin || scoreMax || dateFrom || dateTo || riskFlag;
+  const hasActiveFilters = searchQuery || category || scoreMin || scoreMax || dateFrom || dateTo || riskFlag;
 
   const buildParams = useCallback(() => {
     const params: Record<string, string | number> = { page, per_page: perPage };
-    if (ticker) params.ticker = ticker;
-    if (companyName) params.company_name = companyName;
+    if (searchQuery) params.q = searchQuery;
     if (category) params.category = category;
     if (scoreMin) params.score_min = Number(scoreMin);
     if (scoreMax) params.score_max = Number(scoreMax);
@@ -107,7 +105,7 @@ export default function HistoryPage() {
     if (dateTo) params.date_to = dateTo;
     if (riskFlag) params.risk_flag = riskFlag;
     return params;
-  }, [page, ticker, companyName, category, scoreMin, scoreMax, dateFrom, dateTo, riskFlag]);
+  }, [page, searchQuery, category, scoreMin, scoreMax, dateFrom, dateTo, riskFlag]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -130,7 +128,7 @@ export default function HistoryPage() {
   // Debounced autocomplete fetch
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (!companyName.trim() || companyName.length < 1) {
+    if (!searchQuery.trim() || searchQuery.length < 1) {
       setSuggestions([]);
       setShowSuggestions(false);
       return;
@@ -138,7 +136,7 @@ export default function HistoryPage() {
     setSuggestLoading(true);
     debounceRef.current = setTimeout(async () => {
       try {
-        const res = await disclosures.suggest(companyName.trim());
+        const res = await disclosures.suggest(searchQuery.trim());
         setSuggestions(res.suggestions);
         setShowSuggestions(res.suggestions.length > 0);
         setSuggestActiveIdx(-1);
@@ -149,7 +147,7 @@ export default function HistoryPage() {
       }
     }, 200);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [companyName]);
+  }, [searchQuery]);
 
   // Click outside to close suggestions
   useEffect(() => {
@@ -165,9 +163,10 @@ export default function HistoryPage() {
   const totalPages = Math.ceil(total / perPage);
 
   const handleSelectSuggestion = (s: CompanySuggestion) => {
-    setCompanyName(s.company_name);
-    setTicker(s.ticker);
+    setSearchQuery(s.company_name);
     setShowSuggestions(false);
+    // Immediately trigger search
+    setPage(1);
   };
 
   const handleSuggestKeyDown = (e: React.KeyboardEvent) => {
@@ -188,14 +187,12 @@ export default function HistoryPage() {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    setPage(1);
     setShowSuggestions(false);
-    fetchData();
+    setPage(1);
   };
 
   const handleReset = () => {
-    setTicker("");
-    setCompanyName("");
+    setSearchQuery("");
     setCategory("");
     setScoreMin("");
     setScoreMax("");
@@ -225,6 +222,50 @@ export default function HistoryPage() {
         </p>
       </div>
 
+      {/* Unified search bar — always visible */}
+      <form onSubmit={handleSearch} className="mb-4">
+        <div className="flex items-center gap-2">
+          <div ref={suggestRef} className="relative flex-1">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={handleSuggestKeyDown}
+              onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
+              placeholder="종목코드 또는 회사명 입력 (예: 005930, 삼성전자)"
+              className="w-full bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg px-4 py-2.5 text-sm text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-mint)]"
+            />
+            {/* Autocomplete dropdown */}
+            {showSuggestions && (
+              <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg shadow-lg overflow-hidden max-h-60 overflow-y-auto">
+                {suggestLoading && (
+                  <div className="px-3 py-2 text-xs text-[var(--text-muted)]">검색 중...</div>
+                )}
+                {!suggestLoading && suggestions.map((s, i) => (
+                  <button
+                    key={`${s.ticker}-${s.company_name}`}
+                    type="button"
+                    onMouseDown={(e) => { e.preventDefault(); handleSelectSuggestion(s); }}
+                    className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between gap-2 transition-colors ${
+                      i === suggestActiveIdx
+                        ? "bg-[var(--accent-mint)]/10 text-[var(--accent-mint)]"
+                        : "text-white hover:bg-[var(--bg-hover)]"
+                    }`}
+                  >
+                    <span className="truncate">{s.company_name}</span>
+                    <span className="shrink-0 text-[10px] font-mono text-[var(--text-muted)]">{s.ticker}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <button type="submit" className="btn-primary text-sm py-2.5 px-5 flex items-center gap-1.5 shrink-0">
+            <Search size={14} />
+            검색
+          </button>
+        </div>
+      </form>
+
       {/* Quick filter chips */}
       <div className="flex items-center gap-2 mb-4 flex-wrap">
         {quickFilters.map((qf) => (
@@ -249,162 +290,98 @@ export default function HistoryPage() {
         )}
       </div>
 
-      {/* Collapsible filter panel */}
-      <form onSubmit={handleSearch}>
-        <div className="card mb-6">
-          <button
-            type="button"
-            onClick={() => setFilterOpen(!filterOpen)}
-            className="w-full flex items-center justify-between p-4 text-sm"
-          >
-            <div className="flex items-center gap-2">
-              <SlidersHorizontal size={14} className="text-[var(--accent-mint)]" />
-              <span className="text-white font-medium">필터</span>
-              {hasActiveFilters && (
-                <span className="text-[10px] bg-[var(--accent-mint)]/10 text-[var(--accent-mint)] px-2 py-0.5 rounded-full">
-                  활성화됨
-                </span>
-              )}
-            </div>
-            {filterOpen ? (
-              <ChevronUp size={16} className="text-[var(--text-muted)]" />
-            ) : (
-              <ChevronDown size={16} className="text-[var(--text-muted)]" />
+      {/* Collapsible advanced filters */}
+      <div className="card mb-6">
+        <button
+          type="button"
+          onClick={() => setFilterOpen(!filterOpen)}
+          className="w-full flex items-center justify-between p-4 text-sm"
+        >
+          <div className="flex items-center gap-2">
+            <SlidersHorizontal size={14} className="text-[var(--accent-mint)]" />
+            <span className="text-white font-medium">상세 필터</span>
+            {hasActiveFilters && (
+              <span className="text-[10px] bg-[var(--accent-mint)]/10 text-[var(--accent-mint)] px-2 py-0.5 rounded-full">
+                활성화됨
+              </span>
             )}
-          </button>
+          </div>
+          {filterOpen ? (
+            <ChevronUp size={16} className="text-[var(--text-muted)]" />
+          ) : (
+            <ChevronDown size={16} className="text-[var(--text-muted)]" />
+          )}
+        </button>
 
-          {filterOpen && (
-            <div className="px-4 pb-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div>
-                  <label className="text-xs text-[var(--text-muted)] font-bold tracking-wider">종목코드</label>
-                  <input
-                    type="text"
-                    value={ticker}
-                    onChange={(e) => setTicker(e.target.value)}
-                    placeholder="예: 005930"
-                    className="w-full mt-1 bg-[var(--bg-hover)] border border-[var(--border-color)] rounded px-3 py-2 text-sm text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-mint)]"
-                  />
-                </div>
-                <div ref={suggestRef} className="relative">
-                  <label className="text-xs text-[var(--text-muted)] font-bold tracking-wider">회사명</label>
-                  <input
-                    type="text"
-                    value={companyName}
-                    onChange={(e) => setCompanyName(e.target.value)}
-                    onKeyDown={handleSuggestKeyDown}
-                    onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
-                    placeholder="예: 삼성전자"
-                    className="w-full mt-1 bg-[var(--bg-hover)] border border-[var(--border-color)] rounded px-3 py-2 text-sm text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-mint)]"
-                  />
-                  {/* Autocomplete dropdown */}
-                  {showSuggestions && (
-                    <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg shadow-lg overflow-hidden max-h-60 overflow-y-auto">
-                      {suggestLoading && (
-                        <div className="px-3 py-2 text-xs text-[var(--text-muted)]">검색 중...</div>
-                      )}
-                      {!suggestLoading && suggestions.map((s, i) => (
-                        <button
-                          key={`${s.ticker}-${s.company_name}`}
-                          type="button"
-                          onMouseDown={(e) => { e.preventDefault(); handleSelectSuggestion(s); }}
-                          className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between gap-2 transition-colors ${
-                            i === suggestActiveIdx
-                              ? "bg-[var(--accent-mint)]/10 text-[var(--accent-mint)]"
-                              : "text-white hover:bg-[var(--bg-hover)]"
-                          }`}
-                        >
-                          <span className="truncate">{s.company_name}</span>
-                          <span className="shrink-0 text-[10px] font-mono text-[var(--text-muted)]">{s.ticker}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div>
-                  <label className="text-xs text-[var(--text-muted)] font-bold tracking-wider">카테고리</label>
-                  <select
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    className="w-full mt-1 bg-[var(--bg-hover)] border border-[var(--border-color)] rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-[var(--accent-mint)]"
-                  >
-                    {categories.map((c) => (
-                      <option key={c.value} value={c.value}>{c.label}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-[var(--text-muted)] font-bold tracking-wider">리스크</label>
-                  <select
-                    value={riskFlag}
-                    onChange={(e) => setRiskFlag(e.target.value)}
-                    className="w-full mt-1 bg-[var(--bg-hover)] border border-[var(--border-color)] rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-[var(--accent-mint)]"
-                  >
-                    {riskFlags.map((r) => (
-                      <option key={r.value} value={r.value}>{r.label}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-[var(--text-muted)] font-bold tracking-wider">최소 점수</label>
-                  <input
-                    type="number" min={0} max={100}
-                    value={scoreMin}
-                    onChange={(e) => setScoreMin(e.target.value)}
-                    placeholder="0"
-                    className="w-full mt-1 bg-[var(--bg-hover)] border border-[var(--border-color)] rounded px-3 py-2 text-sm text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-mint)]"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-[var(--text-muted)] font-bold tracking-wider">최대 점수</label>
-                  <input
-                    type="number" min={0} max={100}
-                    value={scoreMax}
-                    onChange={(e) => setScoreMax(e.target.value)}
-                    placeholder="100"
-                    className="w-full mt-1 bg-[var(--bg-hover)] border border-[var(--border-color)] rounded px-3 py-2 text-sm text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-mint)]"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-[var(--text-muted)] font-bold tracking-wider">시작일</label>
-                  <input
-                    type="date"
-                    value={dateFrom}
-                    onChange={(e) => setDateFrom(e.target.value)}
-                    className="w-full mt-1 bg-[var(--bg-hover)] border border-[var(--border-color)] rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-[var(--accent-mint)]"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-[var(--text-muted)] font-bold tracking-wider">종료일</label>
-                  <input
-                    type="date"
-                    value={dateTo}
-                    onChange={(e) => setDateTo(e.target.value)}
-                    className="w-full mt-1 bg-[var(--bg-hover)] border border-[var(--border-color)] rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-[var(--accent-mint)]"
-                  />
-                </div>
+        {filterOpen && (
+          <div className="px-4 pb-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div>
+                <label className="text-xs text-[var(--text-muted)] font-bold tracking-wider">카테고리</label>
+                <select
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  className="w-full mt-1 bg-[var(--bg-hover)] border border-[var(--border-color)] rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-[var(--accent-mint)]"
+                >
+                  {categories.map((c) => (
+                    <option key={c.value} value={c.value}>{c.label}</option>
+                  ))}
+                </select>
               </div>
-              <div className="flex gap-2 mt-4">
-                <button
-                  type="submit"
-                  className="btn-primary text-sm py-2 px-5 flex items-center gap-1.5"
+              <div>
+                <label className="text-xs text-[var(--text-muted)] font-bold tracking-wider">리스크</label>
+                <select
+                  value={riskFlag}
+                  onChange={(e) => setRiskFlag(e.target.value)}
+                  className="w-full mt-1 bg-[var(--bg-hover)] border border-[var(--border-color)] rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-[var(--accent-mint)]"
                 >
-                  <Search size={14} />
-                  검색
-                </button>
-                <button
-                  type="button"
-                  onClick={handleReset}
-                  className="btn-outline text-sm py-2 px-4 flex items-center gap-1.5"
-                >
-                  <X size={14} />
-                  초기화
-                </button>
+                  {riskFlags.map((r) => (
+                    <option key={r.value} value={r.value}>{r.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-[var(--text-muted)] font-bold tracking-wider">최소 점수</label>
+                <input
+                  type="number" min={0} max={100}
+                  value={scoreMin}
+                  onChange={(e) => setScoreMin(e.target.value)}
+                  placeholder="0"
+                  className="w-full mt-1 bg-[var(--bg-hover)] border border-[var(--border-color)] rounded px-3 py-2 text-sm text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-mint)]"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-[var(--text-muted)] font-bold tracking-wider">최대 점수</label>
+                <input
+                  type="number" min={0} max={100}
+                  value={scoreMax}
+                  onChange={(e) => setScoreMax(e.target.value)}
+                  placeholder="100"
+                  className="w-full mt-1 bg-[var(--bg-hover)] border border-[var(--border-color)] rounded px-3 py-2 text-sm text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-mint)]"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-[var(--text-muted)] font-bold tracking-wider">시작일</label>
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  className="w-full mt-1 bg-[var(--bg-hover)] border border-[var(--border-color)] rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-[var(--accent-mint)]"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-[var(--text-muted)] font-bold tracking-wider">종료일</label>
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="w-full mt-1 bg-[var(--bg-hover)] border border-[var(--border-color)] rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-[var(--accent-mint)]"
+                />
               </div>
             </div>
-          )}
-        </div>
-      </form>
+          </div>
+        )}
+      </div>
 
       {/* Results */}
       {loading ? (
