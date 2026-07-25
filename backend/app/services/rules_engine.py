@@ -28,6 +28,11 @@ HARD_FAIL_KEYWORDS = [
     "횡령",
     "배임",
     "상장폐지",
+    "부도",
+    "해산",
+    "영업정지",
+    "파산",
+    "청산",
     "회생절차",
     "법정관리",
     "무상감자",
@@ -142,6 +147,11 @@ def _extract_keywords(text: str) -> dict:
 
     flags["rights_offering"] = bool(re.search(r"(주주배정|일반공모)", text))
     flags["free_increase"] = bool(re.search(r"무상증자", text))
+
+    # 일반 사채발행 (기타파생결합사채, 회사채 등 — CB/BW 제외)
+    flags["debt_issuance"] = bool(
+        re.search(r"(기타파생결합사채|회사채\s*발행|금융채\s*발행)", text)
+    )
     flags["is_third_party"] = bool(re.search(r"(제3자배정|3자배정)", text))
     flags["cb_refixing"] = bool(
         re.search(r"(전환가액\s*조정|리픽싱|전환가액\s*하향)", text)
@@ -362,6 +372,20 @@ def _extract_keywords(text: str) -> dict:
         re.search(r"(상장적격성|실질심사|상장유지)", text)
     )
 
+    # Market warning flags — 시장경보
+    flags["market_warning_attention"] = bool(
+        re.search(r"(투자주의|투자주의환기)", text)
+    )
+    flags["market_warning_caution"] = bool(
+        re.search(r"투자경고", text)
+    )
+    flags["market_warning_danger"] = bool(
+        re.search(r"투자위험", text)
+    )
+    flags["overheated_stock"] = bool(
+        re.search(r"단기과열종목", text)
+    )
+
     # CONTRACT detail flags
     flags["exclusive_supply"] = bool(re.search(r"(독점공급|독점판매)", text))
     flags["export_contract"] = bool(
@@ -375,6 +399,66 @@ def _extract_keywords(text: str) -> dict:
     )
     flags["mou_detected"] = bool(re.search(r"양해각서|MOU", text))
     flags["service_contract"] = bool(re.search(r"용역계약", text))
+
+    # 공정공시 / 조회공시
+    flags["fair_disclosure"] = bool(
+        re.search(r"공정공시", text)
+    )
+    flags["inquiry_reply"] = bool(
+        re.search(r"조회공시.*(답변|확정|부인)", text)
+    )
+
+    # 증권신고서 / 투자설명서
+    flags["securities_registration"] = bool(
+        re.search(r"(증권신고서|투자설명서)", text)
+    )
+    flags["small_offering"] = bool(
+        re.search(r"소액공모", text)
+    )
+
+    # 상호변경
+    flags["company_name_change"] = bool(
+        re.search(r"상호변경", text)
+    )
+
+    # 채무인수 / 채무보증 / 담보제공
+    flags["debt_assumption"] = bool(
+        re.search(r"채무인수", text)
+    )
+    flags["debt_guarantee"] = bool(
+        re.search(r"채무보증", text)
+    )
+    flags["collateral_provision"] = bool(
+        re.search(r"담보제공", text)
+    ) and not flags.get("treasury_as_collateral")  # 자사주 담보는 SH 쪽
+
+    # 자사주 신탁계약
+    flags["treasury_trust"] = bool(
+        re.search(r"(자사주.*신탁|자기주식.*신탁|신탁계약)", text)
+    )
+
+    # 일괄신고
+    flags["shelf_registration"] = bool(
+        re.search(r"(일괄신고|일괄신고추가)", text)
+    )
+
+    # 대규모내부거래 / 지배구조
+    flags["large_internal_transaction"] = bool(
+        re.search(r"(대규모내부거래|내부거래|일감몰아주기)", text)
+    )
+    flags["governance_report"] = bool(
+        re.search(r"(지배구조.*보고|지배구조.*공시|기업지배구조)", text)
+    )
+
+    # ETF / 펀드 / REITs
+    flags["etf_listing"] = bool(
+        re.search(r"(ETF\s*상장|펀드\s*설정|REITs)", text)
+    )
+
+    # 첨부정정 / 정정조건부
+    flags["correction_attached"] = bool(
+        re.search(r"(첨부정정|정정조건부)", text)
+    )
 
     # ETC flags
     flags["patent_acquisition"] = bool(re.search(r"특허권\s*취득|특허\s*취득", text))
@@ -408,6 +492,14 @@ def guess_category(title: str, raw_text: str, keywords: dict = None) -> tuple[st
         if keywords and not keywords.get("audit_unqualified", False):
             return ("DELISTING_RISK", keywords)
         # 감사의견 적정 → treat as earnings (audit report)
+
+    # 감자완료 — 자본감소 완료 (합병·소각 완료), shareholder return signal
+    if any(kw in t for kw in ["감자완료", "감자종료"]):
+        return ("SHAREHOLDER_RETURN", keywords)
+    # 유상감자 — 유상감자는 CAPITAL_RAISING (현금 환급 → 긍정)
+    if any(kw in t for kw in ["유상감자"]):
+        return ("CAPITAL_RAISING", keywords)
+    # "감자" alone (usually 무상감자) → DELISTING_RISK (무상감자는 HARD_FAIL에서 선체크)
     if any(kw in t for kw in [
         "횡령", "배임", "감자", "상장폐지",
         "관리종목", "상장적격성", "회생", "법정관리",
@@ -464,6 +556,48 @@ def guess_category(title: str, raw_text: str, keywords: dict = None) -> tuple[st
         return ("SHAREHOLDER_RETURN", keywords)
     if any(kw in t for kw in ["대량보유", "주식등의대량보유", "지분"]):
         return ("SHAREHOLDER_RETURN", keywords)
+
+    # Fair Disclosure / 조회공시
+    if any(kw in t for kw in ["공정공시"]):
+        return ("SHAREHOLDER_RETURN", keywords)
+    if any(kw in t for kw in ["조회공시답변", "조회공시확정", "조회공시부인"]):
+        return ("SHAREHOLDER_RETURN", keywords)
+
+    # 증권신고서 / 투자설명서 → ADMINISTRATIVE (IPO 절차성 공시)
+    if any(kw in t for kw in ["증권신고서", "투자설명서"]):
+        return ("ADMINISTRATIVE", keywords)
+
+    # 소액공모 → CAPITAL_RAISING
+    if any(kw in t for kw in ["소액공모"]):
+        return ("CAPITAL_RAISING", keywords)
+
+    # 일괄신고 → ADMINISTRATIVE
+    if any(kw in t for kw in ["일괄신고추가", "일괄신고"]):
+        return ("ADMINISTRATIVE", keywords)
+
+    # 상호변경 → SHAREHOLDER_RETURN
+    if any(kw in t for kw in ["상호변경"]):
+        return ("SHAREHOLDER_RETURN", keywords)
+
+    # 채무인수/채무보증/담보제공 → SHAREHOLDER_RETURN (M&A scoring)
+    if any(kw in t for kw in ["채무인수", "채무보증"]):
+        return ("SHAREHOLDER_RETURN", keywords)
+
+    # 자사주 신탁계약 → SHAREHOLDER_RETURN
+    if any(kw in t for kw in ["자사주신탁", "자기주식신탁", "신탁계약"]):
+        return ("SHAREHOLDER_RETURN", keywords)
+
+    # 지배구조 공시
+    if any(kw in t for kw in ["지배구조", "기업지배구조"]):
+        return ("EARNINGS", keywords)
+
+    # ETF/펀드/REITs → ADMINISTRATIVE
+    if any(kw in t for kw in ["ETF 상장", "펀드 설정", "REITs"]):
+        return ("ADMINISTRATIVE", keywords)
+
+    # 첨부정정/정정조건부 → ADMINISTRATIVE
+    if any(kw in t for kw in ["첨부정정", "정정조건부"]):
+        return ("ADMINISTRATIVE", keywords)
 
     return ("OTHER", keywords)
 
@@ -616,6 +750,10 @@ def _score_capital_raising(keywords: dict, ticker: str = None, supabase=None) ->
             return (50, "CAPITAL_RAISING_CB_FACILITY", "", "")
         else:
             return (15, "CAPITAL_RAISING_CB_WORKING", "", "")
+
+    # 일반 사채발행 (기타파생결합사채, 회사채)
+    if keywords.get("debt_issuance", False):
+        return (45, "CAPITAL_RAISING_DEBT_ISSUANCE", "", "")
 
     # 감자
     reduction_type = keywords.get("capital_reduction_type", "")
@@ -827,6 +965,13 @@ def _score_shareholder_return(keywords: dict, ticker: str = None, supabase=None)
         else:
             return (82, "SHAREHOLDER_REPEAT_BUYBACK_CANCEL", "", "취득+소각")
 
+    # 자사주 신탁계약 체결/해지 — 중립~약긍정 (자사주 매입 예고)
+    if keywords.get("treasury_trust", False):
+        if keywords.get("buyback_and_cancel", False) or keywords.get("buyback_only", False):
+            pass  # 더 구체적인 규칙이 위에서 매칭됨
+        else:
+            return (48, "SHAREHOLDER_TREASURY_TRUST", "", "신탁계약")
+
     # 자사주 취득(소각 미언급)
     if buyback_only:
         return (54, "SHAREHOLDER_BUYBACK_ONLY", "", "자사주취득")
@@ -922,6 +1067,18 @@ def _score_shareholder_ma(keywords: dict, ticker: str = None, supabase=None) -> 
     # 행동주의 펀드 등장
     if keywords.get("activist_detected", False):
         return (70, "MA_ACTIVIST", "", "행동주의")
+
+    # 채무인수 — 타인의 채무를 인수 = 자금부담 증가
+    if keywords.get("debt_assumption", False):
+        return (15, "MA_DEBT_ASSUMPTION", "", "채무인수")
+
+    # 채무보증 — 타인을 위한 채무보증 = 우발채무 증가
+    if keywords.get("debt_guarantee", False):
+        return (18, "MA_DEBT_GUARANTEE", "", "채무보증")
+
+    # 담보제공 — 자산을 담보로 제공
+    if keywords.get("collateral_provision", False):
+        return (15, "MA_COLLATERAL_PROVISION", "", "담보제공")
 
     # 출자전환 — 채무를 지분으로 = 부실기업 구조조정
     if keywords.get("debt_to_equity", False):
@@ -1049,6 +1206,40 @@ def evaluate_disclosure(
             skip_llm=True,
         )
 
+    # 시장경보 early return
+    if keywords.get("market_warning_danger", False):
+        return ScoreResult(
+            category="DELISTING_RISK",
+            sub_rule_id="RISK_MARKET_WARNING_DANGER",
+            dvi_score=2,
+            impact_level="HIGH_IMPACT",
+            is_feed_visible=True,
+            skip_llm=True,
+        )
+    if keywords.get("market_warning_caution", False):
+        return ScoreResult(
+            category="DELISTING_RISK",
+            sub_rule_id="RISK_MARKET_WARNING_CAUTION",
+            dvi_score=5,
+            impact_level="HIGH_IMPACT",
+            is_feed_visible=True,
+            skip_llm=True,
+        )
+    if keywords.get("market_warning_attention", False) or keywords.get("overheated_stock", False):
+        return ScoreResult(
+            category="DELISTING_RISK",
+            sub_rule_id="RISK_MARKET_WARNING_ATTENTION",
+            dvi_score=8,
+            impact_level="HIGH_IMPACT",
+            is_feed_visible=True,
+            skip_llm=True,
+        )
+
+    # 자율공시 보너스 — 자발적 공시 = 경영 자신감 신호
+    voluntary_bonus = 0
+    if "[자율공시]" in title:
+        voluntary_bonus = 10
+
     category, _ = guess_category(title, raw_text, keywords)
 
     # Step 4: Compute score
@@ -1057,6 +1248,13 @@ def evaluate_disclosure(
     sub_id = score_result["sub_id"]
     risk_flag = score_result.get("risk_flag", "")
     sub_type = score_result.get("sub_type", "")
+
+    # 자율공시 보너스 적용
+    if voluntary_bonus:
+        score = min(score + voluntary_bonus, 100)
+        # sub_id 접두사에 VOLUNTARY_ 추가
+        if not sub_id.startswith("VOLUNTARY_"):
+            sub_id = f"VOLUNTARY_{sub_id}"
 
     # If a rule flagged HIGH_RISK_TRAP, override
     if risk_flag == "HIGH_RISK_TRAP":
