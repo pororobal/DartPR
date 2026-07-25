@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { disclosures, DisclosureItem, auth } from "@/lib/api";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { disclosures, DisclosureItem, auth, type CompanySuggestion } from "@/lib/api";
 import DisclosureCard from "@/components/DisclosureCard";
 import {
   Search, ChevronLeft, ChevronRight, AlertCircle,
@@ -86,6 +86,14 @@ export default function HistoryPage() {
 
   const [filterOpen, setFilterOpen] = useState(false);
 
+  // Autocomplete state
+  const [suggestions, setSuggestions] = useState<CompanySuggestion[]>([]);
+  const [suggestLoading, setSuggestLoading] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [suggestActiveIdx, setSuggestActiveIdx] = useState(-1);
+  const suggestRef = useRef<HTMLDivElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
   const hasActiveFilters = ticker || companyName || category || scoreMin || scoreMax || dateFrom || dateTo || riskFlag;
 
   const buildParams = useCallback(() => {
@@ -119,11 +127,69 @@ export default function HistoryPage() {
     fetchData();
   }, [fetchData]);
 
+  // Debounced autocomplete fetch
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (!companyName.trim() || companyName.length < 1) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+    setSuggestLoading(true);
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const res = await disclosures.suggest(companyName.trim());
+        setSuggestions(res.suggestions);
+        setShowSuggestions(res.suggestions.length > 0);
+        setSuggestActiveIdx(-1);
+      } catch {
+        setSuggestions([]);
+      } finally {
+        setSuggestLoading(false);
+      }
+    }, 200);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [companyName]);
+
+  // Click outside to close suggestions
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (suggestRef.current && !suggestRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
   const totalPages = Math.ceil(total / perPage);
+
+  const handleSelectSuggestion = (s: CompanySuggestion) => {
+    setCompanyName(s.company_name);
+    setTicker(s.ticker);
+    setShowSuggestions(false);
+  };
+
+  const handleSuggestKeyDown = (e: React.KeyboardEvent) => {
+    if (!showSuggestions || suggestions.length === 0) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setSuggestActiveIdx((prev) => (prev < suggestions.length - 1 ? prev + 1 : 0));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setSuggestActiveIdx((prev) => (prev > 0 ? prev - 1 : suggestions.length - 1));
+    } else if (e.key === "Enter" && suggestActiveIdx >= 0) {
+      e.preventDefault();
+      handleSelectSuggestion(suggestions[suggestActiveIdx]);
+    } else if (e.key === "Escape") {
+      setShowSuggestions(false);
+    }
+  };
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     setPage(1);
+    setShowSuggestions(false);
     fetchData();
   };
 
@@ -220,15 +286,40 @@ export default function HistoryPage() {
                     className="w-full mt-1 bg-[var(--bg-hover)] border border-[var(--border-color)] rounded px-3 py-2 text-sm text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-mint)]"
                   />
                 </div>
-                <div>
+                <div ref={suggestRef} className="relative">
                   <label className="text-xs text-[var(--text-muted)] font-bold tracking-wider">회사명</label>
                   <input
                     type="text"
                     value={companyName}
                     onChange={(e) => setCompanyName(e.target.value)}
+                    onKeyDown={handleSuggestKeyDown}
+                    onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
                     placeholder="예: 삼성전자"
                     className="w-full mt-1 bg-[var(--bg-hover)] border border-[var(--border-color)] rounded px-3 py-2 text-sm text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-mint)]"
                   />
+                  {/* Autocomplete dropdown */}
+                  {showSuggestions && (
+                    <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg shadow-lg overflow-hidden max-h-60 overflow-y-auto">
+                      {suggestLoading && (
+                        <div className="px-3 py-2 text-xs text-[var(--text-muted)]">검색 중...</div>
+                      )}
+                      {!suggestLoading && suggestions.map((s, i) => (
+                        <button
+                          key={`${s.ticker}-${s.company_name}`}
+                          type="button"
+                          onMouseDown={(e) => { e.preventDefault(); handleSelectSuggestion(s); }}
+                          className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between gap-2 transition-colors ${
+                            i === suggestActiveIdx
+                              ? "bg-[var(--accent-mint)]/10 text-[var(--accent-mint)]"
+                              : "text-white hover:bg-[var(--bg-hover)]"
+                          }`}
+                        >
+                          <span className="truncate">{s.company_name}</span>
+                          <span className="shrink-0 text-[10px] font-mono text-[var(--text-muted)]">{s.ticker}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="text-xs text-[var(--text-muted)] font-bold tracking-wider">카테고리</label>

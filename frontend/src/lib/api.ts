@@ -77,6 +77,11 @@ export const auth = {
 
 // ─── Disclosures ───────────────────────────────────────────────
 
+export interface CompanySuggestion {
+  company_name: string;
+  ticker: string;
+}
+
 export interface KeyMetric {
   label: string;
   value: string;
@@ -156,6 +161,10 @@ export const disclosures = {
   /** Re-classify all existing disclosures */
   reclassify: () =>
     apiFetch<{ message: string }>("/api/v1/disclosures/reclassify", { method: "POST" }),
+
+  /** Autocomplete company names */
+  suggest: (q: string) =>
+    apiFetch<{ suggestions: CompanySuggestion[] }>(`/api/v1/disclosures/company-suggest?q=${encodeURIComponent(q)}`),
 
   /** Get stats */
   stats: () =>

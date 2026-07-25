@@ -157,6 +157,44 @@ async def get_live_feed(
 # ---------------------------------------------------------------------------
 
 
+@router.get("/company-suggest")
+async def company_suggest(
+    q: str = Query(..., min_length=1, max_length=100, description="회사명 부분 검색어 (예: 삼ㅅ → 삼성전자)"),
+):
+    """
+    Autocomplete for company names.
+
+    Returns up to 10 distinct (company_name, ticker) pairs matching
+    the partial search term, sorted alphabetically by company_name.
+    """
+    supabase = get_supabase()
+    # Fetch a generous pool to deduplicate client-side — Supabase-py does not
+    # expose column-level DISTINCT, and 47k+ rows are too many to load all.
+    result = (
+        supabase.table("disclosures")
+        .select("company_name, ticker")
+        .ilike("company_name", f"%{q}%")
+        .limit(100)
+        .execute()
+    )
+
+    seen: set[tuple[str, str]] = set()
+    suggestions: list[dict[str, str]] = []
+    for row in result.data or []:
+        name = (row.get("company_name") or "").strip()
+        ticker = (row.get("ticker") or "").strip()
+        key = (name, ticker)
+        if not name:
+            continue
+        if key in seen:
+            continue
+        seen.add(key)
+        suggestions.append({"company_name": name, "ticker": ticker})
+
+    suggestions.sort(key=lambda x: x["company_name"])
+    return {"suggestions": suggestions[:10]}
+
+
 @router.get("/history")
 async def get_history(
     ticker: Optional[str] = Query(None, description="종목코드 (부분일치)"),

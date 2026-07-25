@@ -76,13 +76,17 @@ OPENDART_LIST_URL = "https://opendart.fss.or.kr/api/list.json"
 OPENDART_DOCUMENT_URL = "https://opendart.fss.or.kr/api/document.xml"
 
 
+MAX_PAGES_PER_DAY = 30  # Safety limit: at most 30 pages (3000 items) per day
+
 async def _fetch_list_for_date(date_str: str) -> list[dict]:
     all_items: list[dict] = []
     page_no = 1
     page_count = 100
+    seen_rcept_nos: set[str] = set()
+    seen_content_keys: set[tuple[str, str]] = set()  # (corp_name, report_nm) dedup
 
     async with httpx.AsyncClient(timeout=30.0) as client:
-        while True:
+        while page_no <= MAX_PAGES_PER_DAY:
             params = {
                 "crtfc_key": settings.opendart_api_key,
                 "page_no": page_no,
@@ -108,9 +112,33 @@ async def _fetch_list_for_date(date_str: str) -> list[dict]:
                 break
 
             items = data.get("list", [])
-            all_items.extend(items)
+            if not items:
+                break
+
+            # Safety: detect duplicate pages (API returning same data in loop)
+            page_rcept_nos = {i.get("rcept_no", "") for i in items}
+            if page_rcept_nos.issubset(seen_rcept_nos):
+                logger.info(f"{date_str} page {page_no}: all rcept_no already seen — stopping")
+                break
+
+            # Content-based dedup: OpenDART may return same filing with different rcept_no
+            deduped = []
+            for item in items:
+                content_key = (item.get("corp_name", ""), item.get("report_nm", ""))
+                if content_key not in seen_content_keys:
+                    seen_content_keys.add(content_key)
+                    deduped.append(item)
+
+            if not deduped:
+                logger.info(f"{date_str} page {page_no}: all content already seen — stopping")
+                break
+
+            all_items.extend(deduped)
+            seen_rcept_nos.update(page_rcept_nos)
+
             if len(items) < page_count:
                 break
+
             page_no += 1
             await asyncio.sleep(1)
 
@@ -154,13 +182,26 @@ async def _fetch_document_text(rcept_no: str) -> Optional[str]:
 # ─── DB helpers ────────────────────────────────────────────────────
 
 def _get_existing_rcept_nos(supabase) -> set[str]:
-    result = supabase.table("disclosures").select("dart_rcept_no").execute()
-    return {row["dart_rcept_no"] for row in (result.data or [])}
+    """Load ALL existing dart_rcept_no values with pagination (up to 100k)."""
+    existing: set[str] = set()
+    start = 0
+    page_size = 5000
+    while True:
+        result = supabase.table("disclosures").select("dart_rcept_no").range(start, start + page_size - 1).execute()
+        rows = result.data or []
+        if not rows:
+            break
+        existing.update(row["dart_rcept_no"] for row in rows)
+        if len(rows) < page_size:
+            break
+        start += page_size
+    return existing
 
 
-# ─── Process single disclosure ─────────────────────────────────────
+# ─── Process single disclosure (local only, no API calls) ──────────
 
-async def _process_one(item: dict, supabase) -> bool:
+def _score_item(item: dict) -> Optional[dict]:
+    """Score a single disclosure item locally. Returns insert_data or None."""
     rcept_no = item.get("rcept_no", "")
     ticker = item.get("stock_code", "") or ""
     corp_name = _clean_text(item.get("corp_name", ""))
@@ -168,14 +209,10 @@ async def _process_one(item: dict, supabase) -> bool:
     published_at_str = item.get("rcept_dt", "")
 
     if not rcept_no:
-        return False
+        return None
 
-    if check_administrative(title):
-        raw_text = f"{corp_name} - {title}"
-    else:
-        raw_text = await _fetch_document_text(rcept_no)
-        if raw_text is None:
-            raw_text = f"{corp_name} - {title}"
+    # Use title-only for scoring (skip document download)
+    raw_text = f"{corp_name} - {title}"
     raw_text = _clean_text(raw_text)
 
     try:
@@ -183,11 +220,12 @@ async def _process_one(item: dict, supabase) -> bool:
     except (ValueError, TypeError):
         published_at = datetime.now(timezone.utc)
 
+    supabase_singleton = get_supabase()
     score_result = evaluate_disclosure(
         title=title,
         raw_text=raw_text,
         ticker=ticker,
-        supabase=supabase,
+        supabase=supabase_singleton,
     )
 
     insert_data = {
@@ -211,24 +249,15 @@ async def _process_one(item: dict, supabase) -> bool:
 
     if "\\u0000" in json.dumps(insert_data, ensure_ascii=True):
         logger.warning(f"Skipping {rcept_no}: still contains null escape")
-        return False
+        return None
 
-    try:
-        supabase.table("disclosures").insert(insert_data).execute()
-        logger.info(
-            f"Inserted {rcept_no}: {corp_name} - {title[:50]}"
-            f" score={score_result.dvi_score} feed={score_result.is_feed_visible}"
-        )
-        return True
-    except Exception as e:
-        logger.error(f"Supabase insert failed for {rcept_no}: {e}")
-        return False
+    return insert_data
 
 
 # ─── Commands ──────────────────────────────────────────────────────
 
 async def cmd_fetch(days: int = 90, start_date_str: str = ""):
-    """Fetch + score past N days of disclosures from OpenDART."""
+    """Fetch + score past N days of disclosures from OpenDART (bulk, fast)."""
     if not settings.opendart_api_key:
         logger.error("OPENDART_API_KEY not set")
         return
@@ -267,22 +296,45 @@ async def cmd_fetch(days: int = 90, start_date_str: str = ""):
         total_skipped += skipped
 
         if not new_items:
-            logger.info(f"{date_str}: {len(items)} total, all {skipped} already exist")
+            if skipped:
+                logger.info(f"{date_str}: {len(items)} total, all {skipped} already exist")
             continue
 
+        # Score all new items locally (no API calls, no sleep)
+        batch = []
         for item in new_items:
-            ok = await _process_one(item, supabase)
-            if ok:
-                total_new += 1
-                existing.add(item.get("rcept_no", ""))
-            else:
-                total_errors += 1
-            await asyncio.sleep(1.2)  # Rate limit: < 1 req/s
+            data = _score_item(item)
+            if data:
+                batch.append(data)
 
-        logger.info(
-            f"{date_str}: {len(items)} total, {len(new_items)} new, "
-            f"{skipped} skipped ({total_new} cumulative)"
-        )
+        if not batch:
+            logger.info(f"{date_str}: {len(new_items)} new items, 0 scored")
+            continue
+
+        # Bulk insert
+        try:
+            supabase.table("disclosures").insert(batch).execute()
+            for data in batch:
+                existing.add(data["dart_rcept_no"])
+            total_new += len(batch)
+            logger.info(
+                f"{date_str}: {len(items)} total, {len(batch)} inserted, "
+                f"{skipped} skipped ({total_new} cumulative)"
+            )
+        except Exception as e:
+            # Fallback: insert one by one
+            logger.warning(f"{date_str}: bulk insert failed ({e}), falling back")
+            for data in batch:
+                try:
+                    supabase.table("disclosures").insert(data).execute()
+                    existing.add(data["dart_rcept_no"])
+                    total_new += 1
+                except Exception as e2:
+                    logger.error(f"  insert {data['dart_rcept_no']} failed: {e2}")
+                    total_errors += 1
+
+        # Small delay between days (not per-item)
+        await asyncio.sleep(1)
 
     logger.info(
         f"Fetch complete. Total: {total_new} inserted, "
