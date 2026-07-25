@@ -15,7 +15,14 @@ router = APIRouter(tags=["developer"])
 
 DART_BASE_URL = "https://dart.fss.or.kr/dsaf001/main.do?rcpNo="
 
-_SELECT_COLS = (
+_SELECT_COLS_LIST = (
+    "id,dart_rcept_no,ticker,company_name,title,published_at,"
+    "category,sub_type,sub_rule_id,dvi_score,impact_level,risk_flag,"
+    "is_feed_visible,deceptive_pattern_detected,momentum_authenticity,"
+    "key_metrics,llm_status,created_at"
+)
+
+_SELECT_COLS_DETAIL = (
     "id,dart_rcept_no,ticker,company_name,title,published_at,"
     "category,sub_type,sub_rule_id,dvi_score,impact_level,risk_flag,"
     "is_feed_visible,deceptive_pattern_detected,momentum_authenticity,"
@@ -81,7 +88,7 @@ async def dev_live(
     supabase = get_supabase()
     result = (
         supabase.table("disclosures")
-        .select(_SELECT_COLS)
+        .select(_SELECT_COLS_LIST)
         .eq("is_feed_visible", True)
         .order("published_at", desc=True)
         .limit(limit)
@@ -106,7 +113,7 @@ async def dev_history(
     user: dict = Depends(verify_api_key),
 ):
     supabase = get_supabase()
-    query = supabase.table("disclosures").select(_SELECT_COLS, count="exact")
+    query = supabase.table("disclosures").select(_SELECT_COLS_LIST, count="exact")
 
     if ticker:
         query = query.ilike("ticker", f"%{ticker}%")
