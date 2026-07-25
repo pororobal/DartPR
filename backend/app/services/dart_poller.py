@@ -370,9 +370,15 @@ async def _enrich_with_llm(
 # ---------------------------------------------------------------------------
 
 async def poll_dart_once():
-    # Skip polling during DART submission downtime (19:00 ~ 07:30)
     now = datetime.now().astimezone()
     hour = now.hour
+
+    # Skip weekends (DART 제출 불가)
+    if now.weekday() >= 5:
+        logger.debug("Skipping poll on weekend (DART closed)")
+        return
+
+    # Skip polling during DART submission downtime (19:00 ~ 07:30)
     if hour >= 19 or hour < 7:
         logger.debug("Skipping poll during DART downtime (19:00-07:30)")
         return
