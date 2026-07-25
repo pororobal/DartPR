@@ -46,7 +46,7 @@ def _row_to_response(row: dict) -> dict:
         "dart_rcept_no": rcept_no,
         "dart_url": f"{DART_BASE_URL}{rcept_no}",
         "ticker": row.get("ticker", ""),
-        "company_name": row.get("company_name", ""),
+        "company_name": _normalise_corp_name(row.get("company_name", "")),
         "title": row.get("title", ""),
         "published_at": row.get("published_at", ""),
         "category": row.get("category"),
@@ -201,20 +201,26 @@ async def company_suggest(
         .execute()
     )
 
-    # Group by normalised name + ticker, keep the shortest variant as display name
-    groups: dict[tuple[str, str], list[str]] = {}
+    # Group by normalised name ONLY (not ticker), pick the most common ticker.
+    groups: dict[str, dict] = {}
     for row in result.data or []:
         raw_name = (row.get("company_name") or "").strip()
         ticker = (row.get("ticker") or "").strip()
-        if not raw_name:
+        if not raw_name or not ticker:
             continue
-        key = (_normalise_corp_name(raw_name), ticker)
-        groups.setdefault(key, []).append(raw_name)
+        norm = _normalise_corp_name(raw_name)
+        if norm not in groups:
+            groups[norm] = {"variants": [], "ticker_counts": {}}
+        groups[norm]["variants"].append(raw_name)
+        groups[norm]["ticker_counts"][ticker] = groups[norm]["ticker_counts"].get(ticker, 0) + 1
 
-    suggestions = [
-        {"company_name": _cleanest_name(variants), "ticker": ticker}
-        for (norm, ticker), variants in groups.items()
-    ]
+    suggestions = []
+    for norm, data in groups.items():
+        best_ticker = max(data["ticker_counts"], key=data["ticker_counts"].get)
+        suggestions.append({
+            "company_name": _cleanest_name(data["variants"]),
+            "ticker": best_ticker,
+        })
     suggestions.sort(key=lambda x: x["company_name"])
     return {"suggestions": suggestions[:10]}
 

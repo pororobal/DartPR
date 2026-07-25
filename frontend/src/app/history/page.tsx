@@ -320,7 +320,7 @@ export default function HistoryPage() {
                 <label className="text-xs text-[var(--text-muted)] font-bold tracking-wider">카테고리</label>
                 <select
                   value={category}
-                  onChange={(e) => setCategory(e.target.value)}
+                  onChange={(e) => { setCategory(e.target.value); setPage(1); }}
                   className="w-full mt-1 bg-[var(--bg-hover)] border border-[var(--border-color)] rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-[var(--accent-mint)]"
                 >
                   {categories.map((c) => (
@@ -332,7 +332,7 @@ export default function HistoryPage() {
                 <label className="text-xs text-[var(--text-muted)] font-bold tracking-wider">리스크</label>
                 <select
                   value={riskFlag}
-                  onChange={(e) => setRiskFlag(e.target.value)}
+                  onChange={(e) => { setRiskFlag(e.target.value); setPage(1); }}
                   className="w-full mt-1 bg-[var(--bg-hover)] border border-[var(--border-color)] rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-[var(--accent-mint)]"
                 >
                   {riskFlags.map((r) => (
@@ -345,7 +345,7 @@ export default function HistoryPage() {
                 <input
                   type="number" min={0} max={100}
                   value={scoreMin}
-                  onChange={(e) => setScoreMin(e.target.value)}
+                  onChange={(e) => { setScoreMin(e.target.value); setPage(1); }}
                   placeholder="0"
                   className="w-full mt-1 bg-[var(--bg-hover)] border border-[var(--border-color)] rounded px-3 py-2 text-sm text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-mint)]"
                 />
@@ -355,7 +355,7 @@ export default function HistoryPage() {
                 <input
                   type="number" min={0} max={100}
                   value={scoreMax}
-                  onChange={(e) => setScoreMax(e.target.value)}
+                  onChange={(e) => { setScoreMax(e.target.value); setPage(1); }}
                   placeholder="100"
                   className="w-full mt-1 bg-[var(--bg-hover)] border border-[var(--border-color)] rounded px-3 py-2 text-sm text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-mint)]"
                 />
@@ -365,7 +365,7 @@ export default function HistoryPage() {
                 <input
                   type="date"
                   value={dateFrom}
-                  onChange={(e) => setDateFrom(e.target.value)}
+                  onChange={(e) => { setDateFrom(e.target.value); setPage(1); }}
                   className="w-full mt-1 bg-[var(--bg-hover)] border border-[var(--border-color)] rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-[var(--accent-mint)]"
                 />
               </div>
@@ -374,7 +374,7 @@ export default function HistoryPage() {
                 <input
                   type="date"
                   value={dateTo}
-                  onChange={(e) => setDateTo(e.target.value)}
+                  onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
                   className="w-full mt-1 bg-[var(--bg-hover)] border border-[var(--border-color)] rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-[var(--accent-mint)]"
                 />
               </div>
