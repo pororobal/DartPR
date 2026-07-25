@@ -65,32 +65,29 @@ _SELECT_COLS_DETAIL = (
 # ---------------------------------------------------------------------------
 
 async def _resolve_user_from_token(authorization: str = Header(None)) -> Optional[dict]:
-    """If the request carries a valid Supabase JWT, return user info with plan. Else None."""
+    """If the request carries a valid Supabase JWT, verify via Supabase Auth API and return user with plan."""
     if not authorization:
         return None
     try:
-        import jwt as pyjwt
+        from app.services.supabase_client import get_public_client
         token = authorization.replace("Bearer ", "")
-        payload = pyjwt.decode(
-            token,
-            settings.jwt_secret,
-            algorithms=[settings.jwt_algorithm],
-            options={"verify_aud": False},
+        client = get_public_client()
+        user_resp = client.auth.get_user(token)
+        auth_user = user_resp.user
+        if not auth_user:
+            return None
+        email = auth_user.email or ""
+        if not email:
+            return None
+        supabase = get_supabase()
+        user_row = (
+            supabase.table("users")
+            .select("id, plan, api_key")
+            .eq("email", email)
+            .maybe_single()
+            .execute()
         )
-        # JWT payload has sub, email but NOT plan — query users table for plan
-        email = payload.get("email", "")
-        if email:
-            supabase = get_supabase()
-            user_row = (
-                supabase.table("users")
-                .select("id, plan, api_key")
-                .eq("email", email)
-                .maybe_single()
-                .execute()
-            )
-            if user_row.data:
-                return user_row.data
-        return payload
+        return user_row.data or None
     except Exception:
         return None
 
