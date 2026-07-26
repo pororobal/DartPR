@@ -465,3 +465,103 @@ async def trigger_llm_analysis(
     
     logger.info(f"Manual LLM analysis triggered for {disclosure_id}")
     return {"message": "LLM analysis completed", "summary": llm_result.llm_summary[:200]}
+
+
+# ---------------------------------------------------------------------------
+# /reprocess — Batch LLM re-analysis for disclosures missing analysis
+# ---------------------------------------------------------------------------
+
+
+@router.post("/reprocess")
+async def reprocess_missing_llm(
+    limit: int = 50,
+    user: Optional[dict] = Depends(get_premium_user),
+):
+    """
+    Re-run LLM + Cerebras analysis for disclosures that are missing it.
+    Admin-only. Processes up to `limit` disclosures per call.
+    """
+    if not user or user.get("plan") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    supabase = get_supabase()
+
+    # Find disclosures missing LLM summary and not administrative/trap
+    result = (
+        supabase.table("disclosures")
+        .select("id,dart_rcept_no,ticker,company_name,title,raw_text,dvi_score,category,risk_flag,llm_status,llm_summary")
+        .or_("llm_status.eq.PENDING,llm_summary.is.null")
+        .order("published_at", desc=True)
+        .limit(limit)
+        .execute()
+    )
+
+    rows = result.data or []
+    if not rows:
+        return {"message": "No disclosures need reprocessing", "processed": 0}
+
+    processed = 0
+    skipped = 0
+    errors = 0
+
+    for row in rows:
+        title = row.get("title", "")
+        category = row.get("category", "")
+        risk_flag = row.get("risk_flag", "")
+        score = row.get("dvi_score", 0)
+        existing_summary = row.get("llm_summary")
+
+        # Skip administrative and trap disclosures
+        if category == "ADMINISTRATIVE":
+            skipped += 1
+            continue
+        if risk_flag and risk_flag != "CLEAN":
+            skipped += 1
+            continue
+        # Skip if already has a summary
+        if existing_summary:
+            skipped += 1
+            continue
+
+        rcept_no = row.get("dart_rcept_no", "")
+        ticker = row.get("ticker", "")
+        corp_name = row.get("company_name", "")
+        raw_text = row.get("raw_text", "")
+
+        try:
+            brief = score < 80
+
+            from app.services.groq_llm import analyze_disclosure
+            llm_result = await analyze_disclosure(
+                ticker=ticker,
+                company_name=corp_name,
+                title=title,
+                raw_text=raw_text,
+                brief=brief,
+            )
+
+            if llm_result.llm_summary and llm_result.llm_summary != "LLM 분석 실패":
+                update_data = _clean_payload({
+                    "llm_summary": llm_result.llm_summary[:8000],
+                    "key_metrics": [m.model_dump() for m in llm_result.key_metrics],
+                    "llm_status": "DONE",
+                })
+                supabase.table("disclosures").update(update_data).eq(
+                    "dart_rcept_no", rcept_no
+                ).execute()
+                processed += 1
+                logger.info(f"Reprocessed LLM for {rcept_no}: {title[:40]}")
+            else:
+                errors += 1
+                logger.warning(f"LLM returned failure for {rcept_no}")
+
+        except Exception as e:
+            errors += 1
+            logger.error(f"Reprocess failed for {rcept_no}: {e}")
+
+    return {
+        "message": f"Batch reprocess complete",
+        "processed": processed,
+        "skipped": skipped,
+        "errors": errors,
+    }
