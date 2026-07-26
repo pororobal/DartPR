@@ -253,7 +253,7 @@ async def get_history(
     company_name, category, score range, date range, risk_flag.
     """
     supabase = get_supabase()
-    query = supabase.table("disclosures").select(_SELECT_COLS, count="exact")
+    query = supabase.table("disclosures").select(_SELECT_COLS, count="estimated")
 
     if q:
         query = query.or_(f"company_name.ilike.%{q}%,ticker.ilike.%{q}%")
