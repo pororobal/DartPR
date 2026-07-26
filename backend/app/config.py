@@ -18,11 +18,12 @@ class Settings(BaseSettings):
     # Admin
     admin_api_key: str = "dart0s-admin-2024"
 
-    # Groq LLM (80+ high-impact disclosures)
+    # Groq LLM (free tier, primary LLM provider)
     groq_api_key: str = ""
     groq_model: str = "llama-3.3-70b-versatile"
+    groq_base_url: str = "https://api.groq.com/openai/v1"
 
-    # Cerebras LLM (ambiguous disclosures — keyword matching insufficient)
+    # Cerebras LLM (fallback — requires billing)
     cerebras_api_key: str = ""
     cerebras_model: str = "gpt-oss-120b"
     cerebras_base_url: str = "https://api.cerebras.ai/v1"

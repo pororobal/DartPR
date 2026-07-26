@@ -7,12 +7,13 @@ import json
 import logging
 from typing import List, Optional
 
+from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 
 from app.config import settings
 
 logger = logging.getLogger(__name__)
-_cerebras_semaphore = asyncio.Semaphore(2)
+_llm_semaphore = asyncio.Semaphore(2)
 
 
 ANALYSIS_SYSTEM_PROMPT = """당신은 DART 공시 원문을 분석해 사실을 명확히 전달하는 증권 정보 분석가입니다.
@@ -127,13 +128,29 @@ class CerebrasAmbiguityOutput(BaseModel):
 
 
 def _safe_analysis_fallback(error_msg: str) -> CerebrasAnalysisOutput:
-    logger.warning(f"Cerebras analysis fallback: {error_msg}")
+    logger.warning(f"LLM analysis fallback: {error_msg}")
     return CerebrasAnalysisOutput(llm_summary="LLM 분석 실패", key_metrics=[])
 
 
 def _safe_ambiguity_fallback(error_msg: str) -> CerebrasAmbiguityOutput:
-    logger.warning(f"Cerebras ambiguity fallback: {error_msg}")
+    logger.warning(f"LLM ambiguity fallback: {error_msg}")
     return CerebrasAmbiguityOutput(impact_direction="NEUTRAL", confidence="LOW", reason="LLM 분석 실패")
+
+
+def _pick_llm_client() -> tuple[AsyncOpenAI, str] | None:
+    """Return (client, model) — prefers Groq (free) over Cerebras (paid)."""
+    if settings.groq_api_key:
+        return (
+            AsyncOpenAI(api_key=settings.groq_api_key, base_url=settings.groq_base_url),
+            settings.groq_model,
+        )
+    if settings.cerebras_api_key:
+        logger.info("Groq key not set, falling back to Cerebras (requires billing)")
+        return (
+            AsyncOpenAI(api_key=settings.cerebras_api_key, base_url=settings.cerebras_base_url),
+            settings.cerebras_model,
+        )
+    return None
 
 
 def _build_user_message(ticker: str, company_name: str, title: str, raw_text: str) -> str:
@@ -146,6 +163,10 @@ def _build_user_message(ticker: str, company_name: str, title: str, raw_text: st
 """
 
 
+def _provider_name() -> str:
+    return "Groq" if settings.groq_api_key else "Cerebras"
+
+
 async def analyze_disclosure(
     ticker: str,
     company_name: str,
@@ -153,24 +174,21 @@ async def analyze_disclosure(
     raw_text: str,
     brief: bool = False,
 ) -> CerebrasAnalysisOutput:
-    if not settings.cerebras_api_key:
-        logger.warning("CEREBRAS_API_KEY not set -- skipping analysis")
-        return _safe_analysis_fallback("CEREBRAS_API_KEY not configured")
+    pair = _pick_llm_client()
+    if pair is None:
+        logger.warning("No LLM API key configured (neither GROQ_API_KEY nor CEREBRAS_API_KEY)")
+        return _safe_analysis_fallback("No LLM API key configured")
+
+    client, model = pair
+    provider = _provider_name()
 
     try:
-        from openai import AsyncOpenAI
-
-        client = AsyncOpenAI(
-            api_key=settings.cerebras_api_key,
-            base_url=settings.cerebras_base_url,
-        )
-
         system_prompt = BRIEF_ANALYSIS_PROMPT if brief else ANALYSIS_SYSTEM_PROMPT
         max_tokens = 150 if brief else 700
 
-        async with _cerebras_semaphore:
+        async with _llm_semaphore:
             response = await client.chat.completions.create(
-                model=settings.cerebras_model,
+                model=model,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": _build_user_message(ticker, company_name, title, raw_text)},
@@ -182,7 +200,7 @@ async def analyze_disclosure(
 
         content = response.choices[0].message.content
         if not content:
-            return _safe_analysis_fallback("Empty Cerebras response")
+            return _safe_analysis_fallback(f"Empty {provider} response")
 
         parsed = json.loads(content)
         return CerebrasAnalysisOutput(
@@ -193,11 +211,11 @@ async def analyze_disclosure(
     except json.JSONDecodeError as e:
         return _safe_analysis_fallback(f"JSON parse error: {e}")
     except ImportError:
-        logger.warning("openai package not installed -- skipping Cerebras")
+        logger.warning("openai package not installed")
         return _safe_analysis_fallback("openai package not installed")
     except Exception as e:
-        logger.error(f"Cerebras analysis call failed: {e}", exc_info=True)
-        return _safe_analysis_fallback(f"Cerebras API error: {e}")
+        logger.error(f"{provider} analysis call failed: {e}", exc_info=True)
+        return _safe_analysis_fallback(f"{provider} API error: {e}")
 
 
 async def analyze_ambiguity(
@@ -206,21 +224,18 @@ async def analyze_ambiguity(
     title: str,
     raw_text: str,
 ) -> CerebrasAmbiguityOutput:
-    if not settings.cerebras_api_key:
-        logger.warning("CEREBRAS_API_KEY not set -- skipping ambiguity analysis")
-        return _safe_ambiguity_fallback("CEREBRAS_API_KEY not configured")
+    pair = _pick_llm_client()
+    if pair is None:
+        logger.warning("No LLM API key configured (neither GROQ_API_KEY nor CEREBRAS_API_KEY)")
+        return _safe_ambiguity_fallback("No LLM API key configured")
+
+    client, model = pair
+    provider = _provider_name()
 
     try:
-        from openai import AsyncOpenAI
-
-        client = AsyncOpenAI(
-            api_key=settings.cerebras_api_key,
-            base_url=settings.cerebras_base_url,
-        )
-
-        async with _cerebras_semaphore:
+        async with _llm_semaphore:
             response = await client.chat.completions.create(
-                model=settings.cerebras_model,
+                model=model,
                 messages=[
                     {"role": "system", "content": AMBIGUITY_SYSTEM_PROMPT},
                     {"role": "user", "content": _build_user_message(ticker, company_name, title, raw_text)},
@@ -232,7 +247,7 @@ async def analyze_ambiguity(
 
         content = response.choices[0].message.content
         if not content:
-            return _safe_ambiguity_fallback("Empty Cerebras response")
+            return _safe_ambiguity_fallback(f"Empty {provider} response")
 
         parsed = json.loads(content)
         return CerebrasAmbiguityOutput(
@@ -245,8 +260,8 @@ async def analyze_ambiguity(
     except json.JSONDecodeError as e:
         return _safe_ambiguity_fallback(f"JSON parse error: {e}")
     except ImportError:
-        logger.warning("openai package not installed -- skipping Cerebras")
+        logger.warning("openai package not installed")
         return _safe_ambiguity_fallback("openai package not installed")
     except Exception as e:
-        logger.error(f"Cerebras ambiguity call failed: {e}", exc_info=True)
-        return _safe_ambiguity_fallback(f"Cerebras API error: {e}")
+        logger.error(f"{provider} ambiguity call failed: {e}", exc_info=True)
+        return _safe_ambiguity_fallback(f"{provider} API error: {e}")
