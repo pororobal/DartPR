@@ -402,22 +402,13 @@ async def trigger_llm_analysis(
 ):
     """
     Manually trigger LLM analysis for a specific disclosure.
-
-    Admin-only endpoint to re-run or trigger LLM enrichment.
+    Uses Cerebras for analysis.
     """
     if not user or user.get("plan") != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
 
-    from app.services.groq_llm import analyze_disclosure
-
     supabase = get_supabase()
-    
-    from app.services.groq_llm import analyze_disclosure
-from app.services.rules_engine import _is_ambiguous_title
 
-    supabase = get_supabase()
-    
-    # Get disclosure data
     result = (
         supabase.table("disclosures")
         .select("id,dart_rcept_no,ticker,company_name,title,raw_text,dvi_score")
@@ -425,35 +416,35 @@ from app.services.rules_engine import _is_ambiguous_title
         .maybe_single()
         .execute()
     )
-    
+
     if not result.data:
         raise HTTPException(status_code=404, detail="Disclosure not found")
-    
+
     row = result.data
-    rcept_no = row.get("dart_rcept_no", "")
     ticker = row.get("ticker", "")
     corp_name = row.get("company_name", "")
     title = row.get("title", "")
     raw_text = row.get("raw_text", "")
     score = row.get("dvi_score", 0)
-    
+
     brief = score < 80
-    
-    llm_result = await analyze_disclosure(
+
+    from app.services.cerebras_llm import analyze_disclosure as cerebras_analyze
+    llm_result = await cerebras_analyze(
         ticker=ticker,
         company_name=corp_name,
         title=title,
         raw_text=raw_text,
         brief=brief,
     )
-    
+
     if llm_result.llm_summary == "LLM 분석 실패":
         logger.error(f"LLM analysis failed for {disclosure_id}: fallback triggered")
         raise HTTPException(
             status_code=502,
-            detail="LLM analysis failed — Groq API error or rate limit",
+            detail="LLM analysis failed — Cerebras API error",
         )
-    
+
     update_data = {
         "llm_summary": llm_result.llm_summary[:8000],
         "key_metrics": [m.model_dump() for m in llm_result.key_metrics],
@@ -461,6 +452,7 @@ from app.services.rules_engine import _is_ambiguous_title
         "llm_status": "DONE",
     }
 
+    from app.services.rules_engine import _is_ambiguous_title
     if _is_ambiguous_title(title):
         from app.services.cerebras_llm import analyze_ambiguity
         try:
@@ -475,12 +467,12 @@ from app.services.rules_engine import _is_ambiguous_title
             if cerebras_result.horizon in ("SHORT_TERM", "LONG_TERM"):
                 update_data["signal_horizon"] = cerebras_result.horizon
         except Exception as e:
-            logger.warning(f"Cerebras analysis failed for {disclosure_id}: {e}")
-    
+            logger.warning(f"Cerebras ambiguity analysis failed for {disclosure_id}: {e}")
+
     supabase.table("disclosures").update(update_data).eq(
         "id", disclosure_id
     ).execute()
-    
+
     logger.info(f"Manual LLM analysis triggered for {disclosure_id}")
     return {"message": "LLM analysis completed", "summary": llm_result.llm_summary[:200]}
 
@@ -549,8 +541,8 @@ async def reprocess_missing_llm(
         try:
             brief = score < 80
 
-            from app.services.groq_llm import analyze_disclosure
-            llm_result = await analyze_disclosure(
+            from app.services.cerebras_llm import analyze_disclosure as cerebras_analyze
+            llm_result = await cerebras_analyze(
                 ticker=ticker,
                 company_name=corp_name,
                 title=title,

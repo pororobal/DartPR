@@ -329,9 +329,9 @@ async def _enrich_with_llm(
     brief: bool = False,
 ):
     try:
-        from app.services.groq_llm import analyze_disclosure
+        from app.services.cerebras_llm import analyze_disclosure as cerebras_analyze
 
-        llm_result = await analyze_disclosure(
+        llm_result = await cerebras_analyze(
             ticker=ticker,
             company_name=corp_name,
             title=title,
