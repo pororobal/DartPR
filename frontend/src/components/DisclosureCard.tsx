@@ -171,7 +171,7 @@ export function getNature(item: DisclosureItem): DisclosureNature {
   const sid = item.sub_rule_id || "";
   if (_NEGATIVE_RULES.has(sid)) return "negative";
   if (_POSITIVE_RULES.has(sid)) return "positive";
-  if (item.risk_flag && item.risk_flag !== "CLEAN") return "negative";
+  if (item.risk_flag != null && item.risk_flag !== "CLEAN") return "negative";
   if (item.category === "DELISTING_RISK") return "negative";
 
   if (item.cerebras_sentiment) {
@@ -190,7 +190,7 @@ export function getNature(item: DisclosureItem): DisclosureNature {
 }
 
 function getSignal(item: DisclosureItem): Signal {
-  const isTrap = item.risk_flag === "HIGH_RISK_TRAP";
+  const isTrap = item.risk_flag != null && item.risk_flag !== "CLEAN";
   const s = item.dvi_score ?? 0;
   const nature = getNature(item);
   const horizon = item.signal_horizon || "";
@@ -223,7 +223,7 @@ function getSignal(item: DisclosureItem): Signal {
 }
 
 function getSignalDescription(item: DisclosureItem): string | null {
-  if (item.risk_flag === "HIGH_RISK_TRAP") return null;
+  if (item.risk_flag != null && item.risk_flag !== "CLEAN") return null;
   if (item.category === "ADMINISTRATIVE") return null;
   const sid = item.sub_rule_id || "";
   return SUB_RULE_DESC[sid] || null;
@@ -284,7 +284,7 @@ export default function DisclosureCard({ item, isAdmin = false }: DisclosureCard
     month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
   });
   const isPending = item.llm_status === "PENDING" && !item.llm_summary;
-  const isTrap = item.risk_flag !== "CLEAN";
+  const isTrap = item.risk_flag != null && item.risk_flag !== "CLEAN";
   const isAdministrative = item.category === "ADMINISTRATIVE";
 
   const handleAnalyze = async () => {

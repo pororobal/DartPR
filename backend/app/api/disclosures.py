@@ -485,18 +485,20 @@ async def trigger_llm_analysis(
 @router.post("/reprocess")
 async def reprocess_missing_llm(
     limit: int = 50,
+    min_score: int = 0,
     user: Optional[dict] = Depends(get_premium_user),
 ):
     """
     Re-run LLM + Cerebras analysis for disclosures that are missing it.
     Admin-only. Processes up to `limit` disclosures per call.
+    Use min_score=80 to target only high-scoring disclosures.
     """
     if not user or user.get("plan") != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
 
     supabase = get_supabase()
 
-    # Find disclosures missing LLM summary and not administrative/trap
+    # Fetch PENDING or null-summary disclosures
     result = (
         supabase.table("disclosures")
         .select("id,dart_rcept_no,ticker,company_name,title,raw_text,dvi_score,category,risk_flag,llm_status,llm_summary")
@@ -505,8 +507,30 @@ async def reprocess_missing_llm(
         .limit(limit)
         .execute()
     )
+    rows = list(result.data or [])
 
-    rows = result.data or []
+    # Also fetch "LLM 분석 실패" disclosures (old Groq failures) — separate query
+    failed_result = (
+        supabase.table("disclosures")
+        .select("id,dart_rcept_no,ticker,company_name,title,raw_text,dvi_score,category,risk_flag,llm_status,llm_summary")
+        .eq("llm_status", "DONE")
+        .eq("llm_summary", "LLM 분석 실패")
+        .order("published_at", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    rows.extend(failed_result.data or [])
+
+    # Deduplicate by dart_rcept_no
+    seen = set()
+    deduped = []
+    for row in rows:
+        rn = row.get("dart_rcept_no", "")
+        if rn not in seen:
+            seen.add(rn)
+            deduped.append(row)
+    rows = deduped
+
     if not rows:
         return {"message": "No disclosures need reprocessing", "processed": 0}
 
@@ -518,18 +542,23 @@ async def reprocess_missing_llm(
         title = row.get("title", "")
         category = row.get("category", "")
         risk_flag = row.get("risk_flag", "")
-        score = row.get("dvi_score", 0)
+        score = row.get("dvi_score", 0) or 0
         existing_summary = row.get("llm_summary")
 
-        # Skip administrative and trap disclosures
+        # Skip administrative disclosures
         if category == "ADMINISTRATIVE":
             skipped += 1
             continue
+        # Skip trap disclosures (non-clean risk flags)
         if risk_flag and risk_flag != "CLEAN":
             skipped += 1
             continue
-        # Skip if already has a summary
-        if existing_summary:
+        # Skip if already has a real summary (not failure placeholder)
+        if existing_summary and "실패" not in existing_summary:
+            skipped += 1
+            continue
+        # Skip if below min_score
+        if score < min_score:
             skipped += 1
             continue
 
