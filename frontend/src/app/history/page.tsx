@@ -74,7 +74,8 @@ export default function HistoryPage() {
     checkAdmin();
   }, []);
 
-  // Filters
+  // Filters — searchInput is the live input, searchQuery is the applied value
+  const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [category, setCategory] = useState("");
   const [scoreMin, setScoreMin] = useState("");
@@ -129,10 +130,11 @@ export default function HistoryPage() {
   const isComposingRef = useRef(false);
 
   const hasActiveFilters = searchQuery || category || scoreMin !== "" || scoreMax !== "" || dateFrom || dateTo || riskFlag;
+  const isSearchDirty = searchInput !== searchQuery;
 
   const buildParams = useCallback(() => {
     const params: Record<string, string | number> = { page, per_page: perPage };
-    if (searchQuery) params.q = searchQuery;
+    if (searchQuery) params.q = searchQuery; // searchQuery, not searchInput — only applied on submit
     if (category) params.category = category;
     if (scoreMin !== "") params.score_min = Number(scoreMin);
     if (scoreMax !== "") params.score_max = Number(scoreMax);
@@ -165,7 +167,7 @@ export default function HistoryPage() {
   // Debounced autocomplete fetch (respects IME composition)
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (!searchQuery.trim() || searchQuery.length < 1) {
+    if (!searchInput.trim() || searchInput.length < 1) {
       setSuggestions([]);
       setShowSuggestions(false);
       return;
@@ -174,7 +176,7 @@ export default function HistoryPage() {
     setSuggestLoading(true);
     debounceRef.current = setTimeout(async () => {
       try {
-        const res = await disclosures.suggest(searchQuery.trim());
+        const res = await disclosures.suggest(searchInput.trim());
         setSuggestions(res.suggestions);
         setShowSuggestions(true);
         setSuggestActiveIdx(-1);
@@ -186,7 +188,7 @@ export default function HistoryPage() {
       }
     }, 200);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [searchQuery]);
+  }, [searchInput]);
 
   // Click outside to close suggestions
   useEffect(() => {
@@ -202,9 +204,9 @@ export default function HistoryPage() {
   const totalPages = Math.ceil(total / perPage);
 
   const handleSelectSuggestion = (s: CompanySuggestion) => {
+    setSearchInput(s.company_name);
     setSearchQuery(s.company_name);
     setShowSuggestions(false);
-    // Immediately trigger search
     setPage(1);
   };
 
@@ -226,11 +228,13 @@ export default function HistoryPage() {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
+    setSearchQuery(searchInput); // apply the typed value
     setShowSuggestions(false);
     setPage(1);
   };
 
   const handleReset = () => {
+    setSearchInput("");
     setSearchQuery("");
     setCategory("");
     setScoreMin("");
@@ -240,7 +244,6 @@ export default function HistoryPage() {
     setRiskFlag("");
     setFilterOpen(false);
     setPage(1);
-    // fetchData is triggered by page change → useEffect → fetchData
   };
 
   const applyQuickFilter = (qf: typeof quickFilters[0]) => {
@@ -269,8 +272,8 @@ export default function HistoryPage() {
           <div ref={suggestRef} className="relative flex-1">
             <input
               type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
               onKeyDown={handleSuggestKeyDown}
               onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
               onCompositionStart={() => { isComposingRef.current = true; }}
@@ -279,10 +282,10 @@ export default function HistoryPage() {
               className="w-full bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg pl-4 pr-9 py-2.5 text-sm text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-mint)]"
             />
             {/* 검색어 X 버튼 */}
-            {searchQuery && (
+            {searchInput && (
               <button
                 type="button"
-                onClick={() => { setSearchQuery(""); setPage(1); setShowSuggestions(false); }}
+                onClick={() => { setSearchInput(""); setShowSuggestions(false); }}
                 className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-white transition-colors p-1"
               >
                 <X size={14} />
