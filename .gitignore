@@ -32,6 +32,9 @@ Thumbs.db
 # Vercel
 .vercel
 
+# OpenCode runtime session cache
+.omo/run-continuation/
+
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts

@@ -202,7 +202,7 @@ async def company_suggest(
         supabase.table("disclosures")
         .select("company_name, ticker")
         .or_(or_filter)
-        .limit(100)
+        .limit(1000)
         .execute()
     )
 

@@ -4,9 +4,9 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { disclosures, DisclosureItem, auth, type CompanySuggestion } from "@/lib/api";
 import DisclosureCard from "@/components/DisclosureCard";
 import {
-  Search, ChevronLeft, ChevronRight, AlertCircle,
+  Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, AlertCircle,
   ChevronDown, ChevronUp, SlidersHorizontal, X, Calendar,
-  TrendingUp, Shield, RotateCcw
+  TrendingUp, Shield, RotateCcw, type LucideIcon
 } from "lucide-react";
 
 const categories = [
@@ -45,7 +45,7 @@ interface QuickFilterVals {
   riskFlag?: string;
 }
 
-const quickFilters: { label: string; icon: any; apply: () => QuickFilterVals }[] = [
+const quickFilters: { label: string; icon: LucideIcon; apply: () => QuickFilterVals }[] = [
   { label: "오늘", icon: Calendar, apply: () => ({ dateFrom: getToday(), dateTo: getToday() }) },
   { label: "이번주", icon: Calendar, apply: () => ({ dateFrom: getWeekStart(), dateTo: getToday() }) },
   { label: "고득점 (80+)", icon: TrendingUp, apply: () => ({ scoreMin: "80", scoreMax: "" }) },
@@ -85,6 +85,40 @@ export default function HistoryPage() {
 
   const [filterOpen, setFilterOpen] = useState(false);
 
+  // Draft filter states (batch-apply via "적용" button)
+  const [draftCategory, setDraftCategory] = useState("");
+  const [draftScoreMin, setDraftScoreMin] = useState("");
+  const [draftScoreMax, setDraftScoreMax] = useState("");
+  const [draftDateFrom, setDraftDateFrom] = useState("");
+  const [draftDateTo, setDraftDateTo] = useState("");
+  const [draftRiskFlag, setDraftRiskFlag] = useState("");
+
+  // Sync drafts when opening filter panel
+  const openFilterPanel = () => {
+    setDraftCategory(category);
+    setDraftScoreMin(scoreMin);
+    setDraftScoreMax(scoreMax);
+    setDraftDateFrom(dateFrom);
+    setDraftDateTo(dateTo);
+    setDraftRiskFlag(riskFlag);
+    setFilterOpen(true);
+  };
+
+  const applyFilters = () => {
+    setCategory(draftCategory);
+    setScoreMin(draftScoreMin);
+    setScoreMax(draftScoreMax);
+    setDateFrom(draftDateFrom);
+    setDateTo(draftDateTo);
+    setRiskFlag(draftRiskFlag);
+    setFilterOpen(false);
+    setPage(1);
+  };
+
+  const cancelFilters = () => {
+    setFilterOpen(false);
+  };
+
   // Autocomplete state
   const [suggestions, setSuggestions] = useState<CompanySuggestion[]>([]);
   const [suggestLoading, setSuggestLoading] = useState(false);
@@ -92,26 +126,29 @@ export default function HistoryPage() {
   const [suggestActiveIdx, setSuggestActiveIdx] = useState(-1);
   const suggestRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const isComposingRef = useRef(false);
 
-  const hasActiveFilters = searchQuery || category || scoreMin || scoreMax || dateFrom || dateTo || riskFlag;
+  const hasActiveFilters = searchQuery || category || scoreMin !== "" || scoreMax !== "" || dateFrom || dateTo || riskFlag;
 
   const buildParams = useCallback(() => {
     const params: Record<string, string | number> = { page, per_page: perPage };
     if (searchQuery) params.q = searchQuery;
     if (category) params.category = category;
-    if (scoreMin) params.score_min = Number(scoreMin);
-    if (scoreMax) params.score_max = Number(scoreMax);
+    if (scoreMin !== "") params.score_min = Number(scoreMin);
+    if (scoreMax !== "") params.score_max = Number(scoreMax);
     if (dateFrom) params.date_from = dateFrom;
     if (dateTo) params.date_to = dateTo;
     if (riskFlag) params.risk_flag = riskFlag;
     return params;
   }, [page, searchQuery, category, scoreMin, scoreMax, dateFrom, dateTo, riskFlag]);
 
+  type HistoryParams = Parameters<typeof disclosures.history>[0];
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const result = await disclosures.history(buildParams() as any);
+      const result = await disclosures.history(buildParams() as HistoryParams);
       setItems(result.data || []);
       setTotal(result.total || 0);
     } catch (e) {
@@ -125,7 +162,7 @@ export default function HistoryPage() {
     fetchData();
   }, [fetchData]);
 
-  // Debounced autocomplete fetch
+  // Debounced autocomplete fetch (respects IME composition)
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (!searchQuery.trim() || searchQuery.length < 1) {
@@ -133,15 +170,17 @@ export default function HistoryPage() {
       setShowSuggestions(false);
       return;
     }
+    if (isComposingRef.current) return;
     setSuggestLoading(true);
     debounceRef.current = setTimeout(async () => {
       try {
         const res = await disclosures.suggest(searchQuery.trim());
         setSuggestions(res.suggestions);
-        setShowSuggestions(res.suggestions.length > 0);
+        setShowSuggestions(true);
         setSuggestActiveIdx(-1);
       } catch {
         setSuggestions([]);
+        setShowSuggestions(true);
       } finally {
         setSuggestLoading(false);
       }
@@ -199,7 +238,9 @@ export default function HistoryPage() {
     setDateFrom("");
     setDateTo("");
     setRiskFlag("");
+    setFilterOpen(false);
     setPage(1);
+    // fetchData is triggered by page change → useEffect → fetchData
   };
 
   const applyQuickFilter = (qf: typeof quickFilters[0]) => {
@@ -232,16 +273,28 @@ export default function HistoryPage() {
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={handleSuggestKeyDown}
               onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
+              onCompositionStart={() => { isComposingRef.current = true; }}
+              onCompositionEnd={() => { isComposingRef.current = false; }}
               placeholder="종목코드 또는 회사명 입력 (예: 005930, 삼성전자)"
-              className="w-full bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg px-4 py-2.5 text-sm text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-mint)]"
+              className="w-full bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg pl-4 pr-9 py-2.5 text-sm text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-mint)]"
             />
+            {/* 검색어 X 버튼 */}
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => { setSearchQuery(""); setPage(1); setShowSuggestions(false); }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-white transition-colors p-1"
+              >
+                <X size={14} />
+              </button>
+            )}
             {/* Autocomplete dropdown */}
             {showSuggestions && (
               <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg shadow-lg overflow-hidden max-h-60 overflow-y-auto">
                 {suggestLoading && (
                   <div className="px-3 py-2 text-xs text-[var(--text-muted)]">검색 중...</div>
                 )}
-                {!suggestLoading && suggestions.map((s, i) => (
+                {!suggestLoading && suggestions.length > 0 && suggestions.map((s, i) => (
                   <button
                     key={`${s.ticker}-${s.company_name}`}
                     type="button"
@@ -256,6 +309,11 @@ export default function HistoryPage() {
                     <span className="shrink-0 text-[10px] font-mono text-[var(--text-muted)]">{s.ticker}</span>
                   </button>
                 ))}
+                {!suggestLoading && suggestions.length === 0 && (
+                  <div className="px-3 py-3 text-xs text-[var(--text-muted)] text-center">
+                    검색 결과가 없습니다
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -294,7 +352,7 @@ export default function HistoryPage() {
       <div className="card mb-6">
         <button
           type="button"
-          onClick={() => setFilterOpen(!filterOpen)}
+          onClick={() => filterOpen ? cancelFilters() : openFilterPanel()}
           className="w-full flex items-center justify-between p-4 text-sm"
         >
           <div className="flex items-center gap-2">
@@ -319,8 +377,8 @@ export default function HistoryPage() {
               <div>
                 <label className="text-xs text-[var(--text-muted)] font-bold tracking-wider">카테고리</label>
                 <select
-                  value={category}
-                  onChange={(e) => { setCategory(e.target.value); setPage(1); }}
+                  value={draftCategory}
+                  onChange={(e) => setDraftCategory(e.target.value)}
                   className="w-full mt-1 bg-[var(--bg-hover)] border border-[var(--border-color)] rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-[var(--accent-mint)]"
                 >
                   {categories.map((c) => (
@@ -331,8 +389,8 @@ export default function HistoryPage() {
               <div>
                 <label className="text-xs text-[var(--text-muted)] font-bold tracking-wider">리스크</label>
                 <select
-                  value={riskFlag}
-                  onChange={(e) => { setRiskFlag(e.target.value); setPage(1); }}
+                  value={draftRiskFlag}
+                  onChange={(e) => setDraftRiskFlag(e.target.value)}
                   className="w-full mt-1 bg-[var(--bg-hover)] border border-[var(--border-color)] rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-[var(--accent-mint)]"
                 >
                   {riskFlags.map((r) => (
@@ -344,8 +402,8 @@ export default function HistoryPage() {
                 <label className="text-xs text-[var(--text-muted)] font-bold tracking-wider">최소 점수</label>
                 <input
                   type="number" min={0} max={100}
-                  value={scoreMin}
-                  onChange={(e) => { setScoreMin(e.target.value); setPage(1); }}
+                  value={draftScoreMin}
+                  onChange={(e) => setDraftScoreMin(e.target.value)}
                   placeholder="0"
                   className="w-full mt-1 bg-[var(--bg-hover)] border border-[var(--border-color)] rounded px-3 py-2 text-sm text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-mint)]"
                 />
@@ -354,8 +412,8 @@ export default function HistoryPage() {
                 <label className="text-xs text-[var(--text-muted)] font-bold tracking-wider">최대 점수</label>
                 <input
                   type="number" min={0} max={100}
-                  value={scoreMax}
-                  onChange={(e) => { setScoreMax(e.target.value); setPage(1); }}
+                  value={draftScoreMax}
+                  onChange={(e) => setDraftScoreMax(e.target.value)}
                   placeholder="100"
                   className="w-full mt-1 bg-[var(--bg-hover)] border border-[var(--border-color)] rounded px-3 py-2 text-sm text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-mint)]"
                 />
@@ -364,8 +422,8 @@ export default function HistoryPage() {
                 <label className="text-xs text-[var(--text-muted)] font-bold tracking-wider">시작일</label>
                 <input
                   type="date"
-                  value={dateFrom}
-                  onChange={(e) => { setDateFrom(e.target.value); setPage(1); }}
+                  value={draftDateFrom}
+                  onChange={(e) => setDraftDateFrom(e.target.value)}
                   className="w-full mt-1 bg-[var(--bg-hover)] border border-[var(--border-color)] rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-[var(--accent-mint)]"
                 />
               </div>
@@ -373,11 +431,21 @@ export default function HistoryPage() {
                 <label className="text-xs text-[var(--text-muted)] font-bold tracking-wider">종료일</label>
                 <input
                   type="date"
-                  value={dateTo}
-                  onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
+                  value={draftDateTo}
+                  onChange={(e) => setDraftDateTo(e.target.value)}
                   className="w-full mt-1 bg-[var(--bg-hover)] border border-[var(--border-color)] rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-[var(--accent-mint)]"
                 />
               </div>
+            </div>
+            {/* 적용/취소 버튼 */}
+            <div className="flex items-center justify-end gap-2 mt-4 pt-3 border-t border-[var(--border-color)]">
+              <button onClick={cancelFilters} className="btn-outline text-xs py-2 px-4">
+                취소
+              </button>
+              <button onClick={applyFilters} className="btn-primary text-xs py-2 px-4">
+                <SlidersHorizontal size={12} />
+                적용
+              </button>
             </div>
           </div>
         )}
@@ -463,6 +531,13 @@ export default function HistoryPage() {
           {totalPages > 1 && (
             <div className="flex items-center justify-center gap-2 mt-8">
               <button
+                onClick={() => setPage(1)}
+                disabled={page <= 1}
+                className="btn-outline text-xs flex items-center gap-1 disabled:opacity-30"
+              >
+                <ChevronsLeft size={14} />
+              </button>
+              <button
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page <= 1}
                 className="btn-outline text-xs flex items-center gap-1 disabled:opacity-30"
@@ -495,6 +570,13 @@ export default function HistoryPage() {
                 className="btn-outline text-xs flex items-center gap-1 disabled:opacity-30"
               >
                 다음 <ChevronRight size={14} />
+              </button>
+              <button
+                onClick={() => setPage(totalPages)}
+                disabled={page >= totalPages}
+                className="btn-outline text-xs flex items-center gap-1 disabled:opacity-30"
+              >
+                <ChevronsRight size={14} />
               </button>
             </div>
           )}

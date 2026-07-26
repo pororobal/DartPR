@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { disclosures, DisclosureItem, auth } from "@/lib/api";
 import DisclosureCard, { getNature, DisclosureNature } from "@/components/DisclosureCard";
@@ -17,11 +17,13 @@ const FILTER_OPTIONS: { key: FilterMode; label: string; icon: any }[] = [
 export default function LivePage() {
   const [items, setItems] = useState<DisclosureItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [user, setUser] = useState<any>(null);
   const [isPremium, setIsPremium] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [filter, setFilter] = useState<FilterMode>("all");
+  const scrollDebounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // Check auth state + plan from backend API
   useEffect(() => {
@@ -102,10 +104,22 @@ export default function LivePage() {
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "disclosures" },
         (payload) => {
-          const newItem = payload.new as DisclosureItem;
+          const raw = payload.new as Record<string, unknown>;
+          // Parse key_metrics if it's a raw JSON string
+          if (typeof raw.key_metrics === "string") {
+            try { raw.key_metrics = JSON.parse(raw.key_metrics); } catch { raw.key_metrics = []; }
+          }
+          const newItem = raw as unknown as DisclosureItem;
           if (newItem.is_feed_visible) {
-            setItems((prev) => [newItem, ...prev].slice(0, 100));
-            window.scrollTo({ top: 0, behavior: "smooth" });
+            setItems((prev) => {
+              if (prev.some((i) => i.dart_rcept_no === newItem.dart_rcept_no)) return prev;
+              return [newItem, ...prev].slice(0, 100);
+            });
+            // Debounce scrollTo to avoid fighting user scroll during batch inserts
+            if (scrollDebounceRef.current) clearTimeout(scrollDebounceRef.current);
+            scrollDebounceRef.current = setTimeout(() => {
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }, 300);
           }
         }
       )
@@ -113,7 +127,11 @@ export default function LivePage() {
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "disclosures" },
         (payload) => {
-          const updated = payload.new as DisclosureItem;
+          const raw = payload.new as Record<string, unknown>;
+          if (typeof raw.key_metrics === "string") {
+            try { raw.key_metrics = JSON.parse(raw.key_metrics); } catch { raw.key_metrics = []; }
+          }
+          const updated = raw as unknown as DisclosureItem;
           setItems((prev) =>
             prev.map((item) =>
               item.dart_rcept_no === updated.dart_rcept_no ? updated : item
@@ -125,6 +143,7 @@ export default function LivePage() {
 
     return () => {
       supabase.removeChannel(channel);
+      if (scrollDebounceRef.current) clearTimeout(scrollDebounceRef.current);
     };
   }, []);
 
@@ -190,13 +209,15 @@ export default function LivePage() {
         </div>
         <button
           onClick={() => {
-            setLoading(true);
-            loadData().then(() => setLoading(false));
+            if (refreshing) return;
+            setRefreshing(true);
+            loadData().finally(() => setRefreshing(false));
           }}
-          className="btn-outline text-sm py-2 px-4 flex items-center gap-1.5"
+          disabled={refreshing}
+          className="btn-outline text-sm py-2 px-4 flex items-center gap-1.5 disabled:opacity-50"
         >
-          <RefreshCw size={14} />
-          새로고침
+          <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
+          {refreshing ? "새로고침 중..." : "새로고침"}
         </button>
       </div>
 

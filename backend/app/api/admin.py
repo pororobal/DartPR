@@ -12,13 +12,12 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["admin"])
 
 
-# Simple admin key check (MVP — replace with proper auth later)
-ADMIN_KEY = "dart0s-admin-2024"  # TODO: move to env var
+from app.config import settings
 
 
 async def verify_admin(x_admin_key: Optional[str] = Header(None)):
     """Simple header-based admin auth for MVP."""
-    if not x_admin_key or x_admin_key != ADMIN_KEY:
+    if not x_admin_key or x_admin_key != settings.admin_api_key:
         raise HTTPException(
             status_code=403,
             detail="Invalid admin key",

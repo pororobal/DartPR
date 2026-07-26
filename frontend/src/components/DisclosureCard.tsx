@@ -287,8 +287,6 @@ export default function DisclosureCard({ item, isAdmin = false }: DisclosureCard
   const isTrap = item.risk_flag !== "CLEAN";
   const isAdministrative = item.category === "ADMINISTRATIVE";
 
-  const [analyzeError, setAnalyzeError] = useState<string | null>(null);
-
   const handleAnalyze = async () => {
     if (!item.id) return;
     setAnalyzing(true);

@@ -3,8 +3,7 @@
 import { Copy, Check } from "lucide-react";
 import { useState } from "react";
 
-const codeBlock = (code: string) => {
-  // eslint-disable-next-line react-hooks/rules-of-hooks
+function CodeBlock({ code }: { code: string }) {
   const [copied, setCopied] = useState(false);
   const copy = () => {
     navigator.clipboard.writeText(code);
@@ -22,7 +21,7 @@ const codeBlock = (code: string) => {
       </button>
     </div>
   );
-};
+}
 
 const endpoints = [
   {
