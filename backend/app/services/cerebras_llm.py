@@ -137,19 +137,13 @@ def _safe_ambiguity_fallback(error_msg: str) -> CerebrasAmbiguityOutput:
     return CerebrasAmbiguityOutput(impact_direction="NEUTRAL", confidence="LOW", reason="LLM 분석 실패")
 
 
-def _pick_llm_client() -> tuple[AsyncOpenAI, str] | None:
-    """Return (client, model) — prefers Groq (free) over Cerebras (paid)."""
+def _pick_llm_client() -> AsyncOpenAI | None:
+    """Return an OpenAI-compatible client — prefers Groq (free) over Cerebras (paid)."""
     if settings.groq_api_key:
-        return (
-            AsyncOpenAI(api_key=settings.groq_api_key, base_url=settings.groq_base_url),
-            settings.groq_model,
-        )
+        return AsyncOpenAI(api_key=settings.groq_api_key, base_url=settings.groq_base_url)
     if settings.cerebras_api_key:
         logger.info("Groq key not set, falling back to Cerebras (requires billing)")
-        return (
-            AsyncOpenAI(api_key=settings.cerebras_api_key, base_url=settings.cerebras_base_url),
-            settings.cerebras_model,
-        )
+        return AsyncOpenAI(api_key=settings.cerebras_api_key, base_url=settings.cerebras_base_url)
     return None
 
 
@@ -174,13 +168,13 @@ async def analyze_disclosure(
     raw_text: str,
     brief: bool = False,
 ) -> CerebrasAnalysisOutput:
-    pair = _pick_llm_client()
-    if pair is None:
+    client = _pick_llm_client()
+    if client is None:
         logger.warning("No LLM API key configured (neither GROQ_API_KEY nor CEREBRAS_API_KEY)")
         return _safe_analysis_fallback("No LLM API key configured")
 
-    client, model = pair
-    provider = _provider_name()
+    model = settings.groq_model
+    provider = "Groq"
 
     try:
         system_prompt = BRIEF_ANALYSIS_PROMPT if brief else ANALYSIS_SYSTEM_PROMPT
@@ -224,13 +218,13 @@ async def analyze_ambiguity(
     title: str,
     raw_text: str,
 ) -> CerebrasAmbiguityOutput:
-    pair = _pick_llm_client()
-    if pair is None:
+    client = _pick_llm_client()
+    if client is None:
         logger.warning("No LLM API key configured (neither GROQ_API_KEY nor CEREBRAS_API_KEY)")
         return _safe_ambiguity_fallback("No LLM API key configured")
 
-    client, model = pair
-    provider = _provider_name()
+    model = settings.groq_ambiguity_model
+    provider = "Groq"
 
     try:
         async with _llm_semaphore:
