@@ -329,9 +329,9 @@ async def _enrich_with_llm(
     brief: bool = False,
 ):
     try:
-        from app.services.cerebras_llm import analyze_disclosure as cerebras_analyze
+        from app.services.groq_service import analyze_disclosure as groq_analyze
 
-        llm_result = await cerebras_analyze(
+        llm_result = await groq_analyze(
             ticker=ticker,
             company_name=corp_name,
             title=title,
@@ -378,7 +378,7 @@ async def _enrich_with_cerebras(
     raw_text: str,
 ):
     try:
-        from app.services.cerebras_llm import analyze_ambiguity
+        from app.services.groq_service import analyze_ambiguity
 
         result = await analyze_ambiguity(
             ticker=ticker,
@@ -407,7 +407,7 @@ async def _enrich_with_cerebras(
 
         logger.info(
             f"Cerebras enrichment done for {rcept_no}: "
-            f"sentiment={result.sentiment} horizon={result.horizon}"
+            f"direction={result.impact_direction} horizon={result.horizon}"
         )
 
     except Exception as e:

@@ -429,8 +429,8 @@ async def trigger_llm_analysis(
 
     brief = score < 80
 
-    from app.services.cerebras_llm import analyze_disclosure as cerebras_analyze
-    llm_result = await cerebras_analyze(
+    from app.services.groq_service import analyze_disclosure as groq_analyze
+    llm_result = await groq_analyze(
         ticker=ticker,
         company_name=corp_name,
         title=title,
@@ -454,7 +454,7 @@ async def trigger_llm_analysis(
 
     from app.services.rules_engine import _is_ambiguous_title
     if _is_ambiguous_title(title):
-        from app.services.cerebras_llm import analyze_ambiguity
+        from app.services.groq_service import analyze_ambiguity
         try:
             cerebras_result = await analyze_ambiguity(
                 ticker=ticker, company_name=corp_name,
@@ -570,8 +570,8 @@ async def reprocess_missing_llm(
         try:
             brief = score < 80
 
-            from app.services.cerebras_llm import analyze_disclosure as cerebras_analyze
-            llm_result = await cerebras_analyze(
+            from app.services.groq_service import analyze_disclosure as groq_analyze
+            llm_result = await groq_analyze(
                 ticker=ticker,
                 company_name=corp_name,
                 title=title,

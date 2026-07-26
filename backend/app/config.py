@@ -18,13 +18,13 @@ class Settings(BaseSettings):
     # Admin
     admin_api_key: str = "dart0s-admin-2024"
 
-    # Groq LLM (free tier, primary LLM provider)
+    # Groq LLM (primary — free tier, OpenAI-compatible)
     groq_api_key: str = ""
     groq_model: str = "llama-3.3-70b-versatile"
     groq_ambiguity_model: str = "llama-3.1-8b-instant"
     groq_base_url: str = "https://api.groq.com/openai/v1"
 
-    # Cerebras LLM (fallback — requires billing)
+    # Cerebras LLM (legacy — replaced by Groq, kept for backward compat)
     cerebras_api_key: str = ""
     cerebras_model: str = "gpt-oss-120b"
     cerebras_base_url: str = "https://api.cerebras.ai/v1"

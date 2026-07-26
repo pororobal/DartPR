@@ -6,7 +6,7 @@ import asyncio
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.config import settings
-from app.services.groq_llm import analyze_disclosure
+from app.services.groq_service import analyze_disclosure
 
 async def test_connection():
     print(f"Current GROQ_API_KEY: {settings.groq_api_key}")

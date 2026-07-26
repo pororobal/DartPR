@@ -364,7 +364,7 @@ async def cmd_llm(limit: int = 50):
     if not rows:
         return
 
-    from app.services.groq_llm import analyze_disclosure
+    from app.services.groq_service import analyze_disclosure
 
     done = 0
     for row in rows:
