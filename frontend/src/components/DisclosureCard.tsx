@@ -23,7 +23,7 @@ const categoryChip: Record<string, { label: string; color: string }> = {
 
 // ─── Signal helpers ───────────────────────────────────────────
 
-// sub_rule_id → 사람이 읽을 수 있는 설명 (악재/호재 이유)
+// sub_rule_id → 사람이 읽을 수 있는 설명 (부정/긍정 이유)
 const SUB_RULE_DESC: Record<string, string> = {
   // ── NEGATIVE ──
   "MA_MANAGEMENT_DISPUTE":                "경영권 분쟁 — 의사결정 지연 및 주주가치 훼손 우려",
@@ -165,7 +165,13 @@ const _POSITIVE_RULES = new Set([
   "MA_MAJOR_CHANGE_CONGLO_FIRST",
 ]);
 
-export type DisclosureNature = "positive" | "negative" | "neutral";
+export type DisclosureNature = "positive" | "negative" | "neutral" | "beneficial" | "adverse";
+
+function _normalizeNature(val: string): DisclosureNature {
+  if (val === "beneficial" || val === "positive") return "positive";
+  if (val === "adverse" || val === "negative") return "negative";
+  return "neutral";
+}
 
 export function getNature(item: DisclosureItem): DisclosureNature {
   const sid = item.sub_rule_id || "";
@@ -175,7 +181,7 @@ export function getNature(item: DisclosureItem): DisclosureNature {
   if (item.category === "DELISTING_RISK") return "negative";
 
   if (item.cerebras_sentiment) {
-    return item.cerebras_sentiment as DisclosureNature;
+    return _normalizeNature(item.cerebras_sentiment);
   }
 
   if (item.category === "ADMINISTRATIVE") return "neutral";
@@ -203,7 +209,7 @@ function getSignal(item: DisclosureItem): Signal {
 
   if (nature === "positive" && s >= 90) {
     const prefix = horizon === "LONG_TERM" ? "장기 " : horizon === "SHORT_TERM" ? "단기 " : "";
-    return { icon: "🟢", label: `${prefix}호재`, color: "text-green-400", bg: "bg-green-900/20", horizon };
+    return { icon: "🟢", label: `${prefix}긍정 신호`, color: "text-green-400", bg: "bg-green-900/20", horizon };
   }
 
   if (nature === "positive" && s >= 70) {
@@ -213,7 +219,7 @@ function getSignal(item: DisclosureItem): Signal {
 
   if (nature === "negative") {
     const prefix = horizon === "LONG_TERM" ? "장기 " : horizon === "SHORT_TERM" ? "단기 " : "";
-    return { icon: "🔴", label: `${prefix}악재`, color: "text-red-400", bg: "bg-red-900/20", horizon };
+    return { icon: "🔴", label: `${prefix}부정 신호`, color: "text-red-400", bg: "bg-red-900/20", horizon };
   }
 
   if (s >= 40)

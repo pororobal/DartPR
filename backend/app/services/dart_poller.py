@@ -390,8 +390,8 @@ async def _enrich_with_cerebras(
         horizon_map = {"SHORT_TERM": "SHORT_TERM", "LONG_TERM": "LONG_TERM"}
         horizon = horizon_map.get(result.horizon, "SHORT_TERM")
 
-        sentiment_map = {"POSITIVE": "positive", "NEGATIVE": "negative", "NEUTRAL": "neutral"}
-        sentiment = sentiment_map.get(result.sentiment, "neutral")
+        sentiment_map = {"BENEFICIAL": "beneficial", "ADVERSE": "adverse", "NEUTRAL": "neutral"}
+        sentiment = sentiment_map.get(result.impact_direction, "neutral")
 
         update_data = _clean_payload({
             "signal_horizon": horizon,

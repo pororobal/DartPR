@@ -10,8 +10,8 @@ type FilterMode = "all" | "positive" | "negative";
 
 const FILTER_OPTIONS: { key: FilterMode; label: string; icon: any }[] = [
   { key: "all", label: "전체", icon: null },
-  { key: "positive", label: "호재", icon: TrendingUp },
-  { key: "negative", label: "악재", icon: TrendingDown },
+  { key: "positive", label: "긍정", icon: TrendingUp },
+  { key: "negative", label: "부정", icon: TrendingDown },
 ];
 
 export default function LivePage() {

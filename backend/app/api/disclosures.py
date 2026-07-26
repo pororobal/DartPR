@@ -460,8 +460,8 @@ async def trigger_llm_analysis(
                 ticker=ticker, company_name=corp_name,
                 title=title, raw_text=raw_text,
             )
-            sentiment_map = {"POSITIVE": "positive", "NEGATIVE": "negative", "NEUTRAL": "neutral"}
-            update_data["cerebras_sentiment"] = sentiment_map.get(cerebras_result.sentiment, "neutral")
+            sentiment_map = {"BENEFICIAL": "beneficial", "ADVERSE": "adverse", "NEUTRAL": "neutral"}
+            update_data["cerebras_sentiment"] = sentiment_map.get(cerebras_result.impact_direction, "neutral")
             update_data["cerebras_confidence"] = cerebras_result.confidence
             update_data["cerebras_reason"] = cerebras_result.reason[:500]
             if cerebras_result.horizon in ("SHORT_TERM", "LONG_TERM"):

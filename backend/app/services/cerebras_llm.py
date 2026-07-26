@@ -91,17 +91,17 @@ AMBIGUITY_SYSTEM_PROMPT = """당신은 DART 공시 제목과 원문을 분석하
 
 분석 원칙:
 1. 공시 제목과 원문의 사실만으로 판단하십시오. 원문에 없는 정보 절대 금지.
-2. 해당 공시 내용의 방향성(긍정/부정/중립)과 영향 기간(단기/장기)을 공시 내용에 기반해 판단하십시오.
+2. 해당 공시 내용의 방향성(수혜/부정/중립)과 영향 기간(단기/장기)을 공시 내용에 기반해 판단하십시오.
 3. 확신이 없으면 NEUTRAL로, 불확실하면 confidence LOW로 판단하십시오.
 
 좋은 예:
-- "CB 전환가액을 현 주가보다 낮게 하향 조정 → 신주 발행 시 지분 희석 발생, 전환청구 가능성 높아짐" → NEGATIVE / SHORT_TERM / HIGH
-- "자회사 지분 100% 추가 취득 → 연결 강화로 장기 수익성 개선 구조, 인수 금액 대비 자금 부담은 제한적" → POSITIVE / LONG_TERM / MEDIUM
+- "CB 전환가액을 현 주가보다 낮게 하향 조정 → 신주 발행 시 지분 희석 발생, 전환청구 가능성 높아짐" → ADVERSE / SHORT_TERM / HIGH
+- "자회사 지분 100% 추가 취득 → 연결 강화로 장기 수익성 개선 구조, 인수 금액 대비 자금 부담은 제한적" → BENEFICIAL / LONG_TERM / MEDIUM
 - "타법인 주식 50억 취득(자기자본 3%) → 소규모 지분 투자, 전략적 목적이 확인될 때까지 추가 정보 필요" → NEUTRAL / SHORT_TERM / LOW
 
 STRICT OUTPUT: 아래 JSON 스키마로만 응답하십시오.
 {
-  "sentiment": "POSITIVE | NEGATIVE | NEUTRAL",
+  "impact_direction": "BENEFICIAL | ADVERSE | NEUTRAL",
   "horizon": "SHORT_TERM | LONG_TERM",
   "confidence": "HIGH | MEDIUM | LOW",
   "reason": "1-2문장 요약 (판단 근거)"
@@ -120,7 +120,7 @@ class CerebrasAnalysisOutput(BaseModel):
 
 
 class CerebrasAmbiguityOutput(BaseModel):
-    sentiment: str = "NEUTRAL"
+    impact_direction: str = "NEUTRAL"
     horizon: str = "SHORT_TERM"
     confidence: str = "LOW"
     reason: str = ""
@@ -133,7 +133,7 @@ def _safe_analysis_fallback(error_msg: str) -> CerebrasAnalysisOutput:
 
 def _safe_ambiguity_fallback(error_msg: str) -> CerebrasAmbiguityOutput:
     logger.warning(f"Cerebras ambiguity fallback: {error_msg}")
-    return CerebrasAmbiguityOutput(sentiment="NEUTRAL", confidence="LOW", reason="LLM 분석 실패")
+    return CerebrasAmbiguityOutput(impact_direction="NEUTRAL", confidence="LOW", reason="LLM 분석 실패")
 
 
 def _build_user_message(ticker: str, company_name: str, title: str, raw_text: str) -> str:
@@ -236,7 +236,7 @@ async def analyze_ambiguity(
 
         parsed = json.loads(content)
         return CerebrasAmbiguityOutput(
-            sentiment=parsed.get("sentiment", "NEUTRAL"),
+            impact_direction=parsed.get("impact_direction", "NEUTRAL"),
             horizon=parsed.get("horizon", "SHORT_TERM"),
             confidence=parsed.get("confidence", "LOW"),
             reason=parsed.get("reason", ""),
