@@ -412,6 +412,11 @@ async def trigger_llm_analysis(
 
     supabase = get_supabase()
     
+    from app.services.groq_llm import analyze_disclosure
+from app.services.rules_engine import _is_ambiguous_title
+
+    supabase = get_supabase()
+    
     # Get disclosure data
     result = (
         supabase.table("disclosures")
@@ -432,7 +437,6 @@ async def trigger_llm_analysis(
     raw_text = row.get("raw_text", "")
     score = row.get("dvi_score", 0)
     
-    # Determine brief vs full analysis
     brief = score < 80
     
     llm_result = await analyze_disclosure(
@@ -443,7 +447,6 @@ async def trigger_llm_analysis(
         brief=brief,
     )
     
-    # Groq 내부에서 실패 시 "LLM 분석 실패" fallback 반환 — 저장하지 않고 에러 처리
     if llm_result.llm_summary == "LLM 분석 실패":
         logger.error(f"LLM analysis failed for {disclosure_id}: fallback triggered")
         raise HTTPException(
@@ -451,13 +454,28 @@ async def trigger_llm_analysis(
             detail="LLM analysis failed — Groq API error or rate limit",
         )
     
-    # Update database
     update_data = {
         "llm_summary": llm_result.llm_summary[:8000],
         "key_metrics": [m.model_dump() for m in llm_result.key_metrics],
         "llm_raw_response": llm_result.model_dump(),
         "llm_status": "DONE",
     }
+
+    if _is_ambiguous_title(title):
+        from app.services.cerebras_llm import analyze_ambiguity
+        try:
+            cerebras_result = await analyze_ambiguity(
+                ticker=ticker, company_name=corp_name,
+                title=title, raw_text=raw_text,
+            )
+            sentiment_map = {"POSITIVE": "positive", "NEGATIVE": "negative", "NEUTRAL": "neutral"}
+            update_data["cerebras_sentiment"] = sentiment_map.get(cerebras_result.sentiment, "neutral")
+            update_data["cerebras_confidence"] = cerebras_result.confidence
+            update_data["cerebras_reason"] = cerebras_result.reason[:500]
+            if cerebras_result.horizon in ("SHORT_TERM", "LONG_TERM"):
+                update_data["signal_horizon"] = cerebras_result.horizon
+        except Exception as e:
+            logger.warning(f"Cerebras analysis failed for {disclosure_id}: {e}")
     
     supabase.table("disclosures").update(update_data).eq(
         "id", disclosure_id
