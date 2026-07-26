@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { auth } from "@/lib/api";
-import { User, ChevronDown, Crown, LogOut, CreditCard, Clock, Zap } from "lucide-react";
+import { User, ChevronDown, Crown, LogOut, CreditCard, Clock, Menu, X } from "lucide-react";
 
 const planLabels: Record<string, string> = {
   free: "Free",
@@ -31,6 +31,7 @@ export default function Navbar() {
   const [plan, setPlan] = useState<string>("free");
   const [planExpiresAt, setPlanExpiresAt] = useState<string | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
@@ -105,37 +106,13 @@ export default function Navbar() {
             <span className="text-white">PR</span>
           </Link>
 
+          {/* ── Desktop nav ─────────────────────────────── */}
           <div className="hidden md:flex items-center gap-8">
-            <Link
-              href="/live"
-              className="text-sm font-medium text-[var(--text-secondary)] hover:text-white transition-colors"
-            >
-              실시간 피드
-            </Link>
-            <Link
-              href="/history"
-              className="text-sm font-medium text-[var(--text-secondary)] hover:text-white transition-colors"
-            >
-              히스토리
-            </Link>
-            <Link
-              href="/intro"
-              className="text-sm font-medium text-[var(--text-secondary)] hover:text-white transition-colors"
-            >
-              소개
-            </Link>
-            <Link
-              href="/notices"
-              className="text-sm font-medium text-[var(--text-secondary)] hover:text-white transition-colors"
-            >
-              공지사항
-            </Link>
-            <Link
-              href="/pricing"
-              className="text-sm font-medium text-[var(--text-secondary)] hover:text-white transition-colors"
-            >
-              플랜
-            </Link>
+            <Link href="/live" className="text-sm font-medium text-[var(--text-secondary)] hover:text-white transition-colors">실시간 피드</Link>
+            <Link href="/history" className="text-sm font-medium text-[var(--text-secondary)] hover:text-white transition-colors">히스토리</Link>
+            <Link href="/intro" className="text-sm font-medium text-[var(--text-secondary)] hover:text-white transition-colors">소개</Link>
+            <Link href="/notices" className="text-sm font-medium text-[var(--text-secondary)] hover:text-white transition-colors">공지사항</Link>
+            <Link href="/pricing" className="text-sm font-medium text-[var(--text-secondary)] hover:text-white transition-colors">플랜</Link>
 
             {session ? (
               <div className="relative" ref={dropdownRef}>
@@ -161,39 +138,26 @@ export default function Navbar() {
                         </span>
                         {plan !== "free" && daysLeft !== null && (
                           <span className="text-xs text-[var(--text-muted)] flex items-center gap-1">
-                            <Clock size={10} />
-                            잔여 {daysLeft}일
+                            <Clock size={10} /> 잔여 {daysLeft}일
                           </span>
                         )}
                       </div>
                     </div>
-
                     <div className="p-2">
                       {plan === "free" ? (
-                        <Link
-                          href="/pricing"
-                          onClick={() => setDropdownOpen(false)}
-                          className="flex items-center gap-2 w-full px-3 py-2 text-sm text-[var(--text-secondary)] hover:text-white hover:bg-white/5 rounded-lg transition-colors"
-                        >
-                          <Crown size={14} className="text-yellow-400" />
-                          플랜 업그레이드
+                        <Link href="/pricing" onClick={() => setDropdownOpen(false)}
+                          className="flex items-center gap-2 w-full px-3 py-2 text-sm text-[var(--text-secondary)] hover:text-white hover:bg-white/5 rounded-lg transition-colors">
+                          <Crown size={14} className="text-yellow-400" /> 플랜 업그레이드
                         </Link>
                       ) : (
-                        <Link
-                          href="/pricing"
-                          onClick={() => setDropdownOpen(false)}
-                          className="flex items-center gap-2 w-full px-3 py-2 text-sm text-[var(--text-secondary)] hover:text-white hover:bg-white/5 rounded-lg transition-colors"
-                        >
-                          <CreditCard size={14} />
-                          플랜 관리
+                        <Link href="/pricing" onClick={() => setDropdownOpen(false)}
+                          className="flex items-center gap-2 w-full px-3 py-2 text-sm text-[var(--text-secondary)] hover:text-white hover:bg-white/5 rounded-lg transition-colors">
+                          <CreditCard size={14} /> 플랜 관리
                         </Link>
                       )}
-                      <button
-                        onClick={handleLogout}
-                        className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-400 hover:text-red-300 hover:bg-red-900/10 rounded-lg transition-colors"
-                      >
-                        <LogOut size={14} />
-                        로그아웃
+                      <button onClick={handleLogout}
+                        className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-400 hover:text-red-300 hover:bg-red-900/10 rounded-lg transition-colors">
+                        <LogOut size={14} /> 로그아웃
                       </button>
                     </div>
                   </div>
@@ -201,17 +165,79 @@ export default function Navbar() {
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                <Link href="/login" className="btn-outline text-sm py-1.5 px-3">
-                  로그인
-                </Link>
-                <Link href="/signup" className="btn-primary text-sm py-1.5 px-3">
-                  회원가입
-                </Link>
+                <Link href="/login" className="btn-outline text-sm py-1.5 px-3">로그인</Link>
+                <Link href="/signup" className="btn-primary text-sm py-1.5 px-3">회원가입</Link>
               </div>
             )}
           </div>
+
+          {/* ── Mobile hamburger ──────────────────────────── */}
+          <button
+            onClick={() => setMobileOpen(!mobileOpen)}
+            className="md:hidden p-2 text-[var(--text-secondary)] hover:text-white transition-colors"
+            aria-label="메뉴 열기"
+          >
+            {mobileOpen ? <X size={22} /> : <Menu size={22} />}
+          </button>
         </div>
+
+        {/* ── Mobile drawer ────────────────────────────────── */}
+        {mobileOpen && (
+          <div className="md:hidden border-t border-[var(--border-color)] bg-[var(--bg-primary)]/95 backdrop-blur-lg">
+            <div className="px-4 py-4 space-y-1">
+              <MobileNavItem href="/live" label="실시간 피드" onClick={() => setMobileOpen(false)} />
+              <MobileNavItem href="/history" label="히스토리" onClick={() => setMobileOpen(false)} />
+              <MobileNavItem href="/intro" label="소개" onClick={() => setMobileOpen(false)} />
+              <MobileNavItem href="/notices" label="공지사항" onClick={() => setMobileOpen(false)} />
+              <MobileNavItem href="/pricing" label="플랜" onClick={() => setMobileOpen(false)} />
+              <div className="border-t border-[var(--border-color)] my-3" />
+              {session ? (
+                <>
+                  <div className="px-3 py-2 flex items-center gap-2 text-sm text-[var(--text-secondary)]">
+                    <User size={16} />
+                    <span className="truncate">{session.user?.email}</span>
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${planColors[plan] || planColors.free} ml-auto`}>
+                      {planLabels[plan] || "Free"}
+                    </span>
+                  </div>
+                  {plan === "free" ? (
+                    <MobileNavItem href="/pricing" label="플랜 업그레이드" icon={<Crown size={16} className="text-yellow-400" />} onClick={() => setMobileOpen(false)} />
+                  ) : (
+                    <MobileNavItem href="/pricing" label="플랜 관리" icon={<CreditCard size={16} />} onClick={() => setMobileOpen(false)} />
+                  )}
+                  <button onClick={() => { handleLogout(); setMobileOpen(false); }}
+                    className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-red-400 hover:text-red-300 rounded-lg transition-colors">
+                    <LogOut size={16} /> 로그아웃
+                  </button>
+                </>
+              ) : (
+                <div className="flex items-center gap-2 px-3 pt-1">
+                  <Link href="/login" onClick={() => setMobileOpen(false)}
+                    className="flex-1 text-center btn-outline text-sm py-2">로그인</Link>
+                  <Link href="/signup" onClick={() => setMobileOpen(false)}
+                    className="flex-1 text-center btn-primary text-sm py-2">회원가입</Link>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Overlay */}
+      {mobileOpen && (
+        <div className="md:hidden fixed inset-0 z-[-1]" onClick={() => setMobileOpen(false)} />
+      )}
     </nav>
+  );
+}
+
+function MobileNavItem({ href, label, icon, onClick }: {
+  href: string; label: string; icon?: React.ReactNode; onClick: () => void;
+}) {
+  return (
+    <Link href={href} onClick={onClick}
+      className="flex items-center gap-2 px-3 py-2.5 text-sm text-[var(--text-secondary)] hover:text-white hover:bg-white/5 rounded-lg transition-colors">
+      {icon}{label}
+    </Link>
   );
 }
