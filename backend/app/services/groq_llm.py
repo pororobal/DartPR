@@ -174,7 +174,7 @@ async def analyze_disclosure(
 """
 
         system_prompt = BRIEF_PROMPT if brief else SYSTEM_PROMPT
-        max_tokens = 150 if brief else 700
+        max_tokens = 150 if brief else 1200
 
         async with _groq_semaphore:
             response = await client.chat.completions.create(

@@ -442,7 +442,7 @@ async def trigger_llm_analysis(
         logger.error(f"LLM analysis failed for {disclosure_id}: fallback triggered")
         raise HTTPException(
             status_code=502,
-            detail="LLM analysis failed — Cerebras API error",
+            detail="LLM analysis failed — API error",
         )
 
     update_data = {

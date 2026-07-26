@@ -184,7 +184,7 @@ async def analyze_disclosure(
 
     try:
         system_prompt = BRIEF_ANALYSIS_PROMPT if brief else ANALYSIS_SYSTEM_PROMPT
-        max_tokens = 150 if brief else 700
+        max_tokens = 150 if brief else 1200
 
         async with _llm_semaphore:
             response = await client.chat.completions.create(
@@ -241,7 +241,7 @@ async def analyze_ambiguity(
                     {"role": "user", "content": _build_user_message(ticker, company_name, title, raw_text)},
                 ],
                 temperature=0.1,
-                max_tokens=200,
+                max_tokens=400,
                 response_format={"type": "json_object"},
             )
 
