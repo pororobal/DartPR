@@ -81,13 +81,6 @@ const steps = [
   { num: "03", title: "실시간 전달", desc: "점수와 함께 실시간 피드에 즉시 노출. 80점↑ 고impact 공시는 LLM 요약까지 자동 생성.", icon: Zap },
 ];
 
-const stats = [
-  { label: "실시간 공시", value: "390+" },
-  { label: "분석 커버리지", value: "7개 카테고리" },
-  { label: "평균 분석 시간", value: "< 1초" },
-  { label: "업데이트 주기", value: "30초" },
-];
-
 export default function IntroPage() {
   return (
     <div className="min-h-screen">
@@ -125,15 +118,6 @@ export default function IntroPage() {
             </Link>
           </div>
 
-          {/* Stats row */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mt-16 p-6 rounded-2xl bg-[var(--bg-card)]/50 border border-[var(--border-color)]">
-            {stats.map((s) => (
-              <div key={s.label} className="text-center">
-                <div className="text-2xl font-bold text-white">{s.value}</div>
-                <div className="text-xs text-[var(--text-muted)] mt-1">{s.label}</div>
-              </div>
-            ))}
-          </div>
         </div>
       </section>
 
