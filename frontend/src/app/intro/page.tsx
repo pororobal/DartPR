@@ -15,7 +15,7 @@ const problems = [
   {
     icon: FileText,
     title: "읽어도 모르는 원문",
-    desc: "공시 원문은 법률 용어와 형식적인 문구로 가득해, 호재인지 악재인지 일반인이 판단하기 어렵습니다.",
+    desc: "공시 원문은 법률 용어와 형식적인 문구로 가득해, 그 내용이 실제로 어떤 의미인지 일반인이 파악하기 어렵습니다.",
   },
   {
     icon: Clock,
@@ -36,7 +36,7 @@ const features = [
   {
     icon: Brain,
     title: "AI 자동 분류 + 분석",
-    desc: "카테고리 분류, 키워드 추출, DVI 점수 산출까지 1초 미만. 긍정·부정 여부도 함께 제공합니다.",
+    desc: "카테고리 분류, 키워드 추출, DVI 점수 산출까지 1초 미만. 공시가 어떤 성격인지 한눈에 파악하세요.",
     color: "text-purple-400",
     bg: "bg-purple-900/10",
     border: "border-purple-900/30",
@@ -44,7 +44,7 @@ const features = [
   {
     icon: Target,
     title: "DVI 중요도 점수",
-    desc: "0~100점으로 공시의 중요도와 시장 영향을 정량화. 90점 이상은 강력한 시그널, 낮은 점수는 가볍게 스킵하세요.",
+    desc: "0~100점으로 공시의 중요도와 정보량을 정량화. 점수가 높을수록 내용이 풍부하거나 이례적인 공시입니다.",
     color: "text-green-400",
     bg: "bg-green-900/10",
     border: "border-green-900/30",
@@ -60,7 +60,7 @@ const features = [
   {
     icon: Brain,
     title: "AI가 써주는 요약",
-    desc: "공시 원문을 AI가 읽고 핵심을 2~3문장으로 요약. \"갑자기 하락하는데 무슨 일이지?\" → DartPR을 먼저 확인하세요.",
+    desc: "공시 원문을 AI가 읽고 핵심만 2~3문장으로 요약. 긴 원문을 일일이 읽지 않고도 공시의 핵심을 파악하세요.",
     color: "text-teal-400",
     bg: "bg-teal-900/10",
     border: "border-teal-900/30",
@@ -77,7 +77,7 @@ const features = [
 
 const steps = [
   { num: "01", title: "공시 수집", desc: "OpenDART에서 새로운 공시를 30초 간격으로 24시간 자동 수집합니다.", icon: FileText },
-  { num: "02", title: "AI 분석", desc: "카테고리 분류 → 긍정/부정/중립 판별 → DVI 점수 산출 → 위험 탐지까지 1초 미만.", icon: Brain },
+  { num: "02", title: "AI 분석",     desc: "카테고리 분류 → 키워드 분석 → DVI 점수 산출 → 위험 탐지까지 1초 미만.", icon: Brain },
   { num: "03", title: "실시간 전달", desc: "점수와 함께 실시간 피드에 즉시 노출. 80점↑ 고impact 공시는 LLM 요약까지 자동 생성.", icon: Zap },
 ];
 
@@ -106,14 +106,13 @@ export default function IntroPage() {
           </div>
 
           <h1 className="text-4xl md:text-6xl font-bold text-white leading-tight tracking-tight">
-            공시 원문만으로<br />
-            <span className="text-[var(--text-secondary)]">호재인지 악재인지</span><br />
-            <span className="text-[var(--accent-mint)]">AI가 먼저 읽습니다</span>
+            쏟아지는 공시,<br />
+            <span className="text-[var(--accent-mint)]">AI가 먼저 읽고 구조화합니다</span>
           </h1>
 
           <p className="text-lg text-[var(--text-secondary)] mt-6 max-w-xl leading-relaxed">
             DartPR은 모든 OpenDART 공시를 실시간 수집하고 AI가 분석합니다.
-            긍정·부정 판별, 중요도 점수, 위험 탐지로 단 한 건의 핵심 공시도 놓치지 마세요.
+            카테고리 분류, 중요도 점수, 위험 탐지로 단 한 건의 핵심 공시도 놓치지 마세요.
           </p>
 
           <div className="flex items-center gap-4 mt-8">
