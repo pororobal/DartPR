@@ -1,26 +1,17 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Zap, BarChart3, Search, Shield, Brain, Clock, ArrowRight,
   TrendingUp, FileText, Activity, ChevronRight, AlertTriangle, Target,
   Filter, Sparkles, PieChart
 } from "lucide-react";
+import { introExamples, IntroExample } from "@/lib/api";
 
 // ─── Real examples from today's feed ──────────────────────────
 
-interface ExampleCardProps {
-  ticker: string;
-  company: string;
-  time: string;
-  title: string;
-  score: number;
-  signal: { icon: string; label: string; color: string };
-  summary: string;
-  badge: string;
-}
-
-const examples: ExampleCardProps[] = [
+const FALLBACK_EXAMPLES: IntroExample[] = [
   {
     ticker: "035420",
     company: "NAVER",
@@ -133,7 +124,7 @@ const steps = [
 
 // ─── ExampleCard component ────────────────────────────────────
 
-function ExampleCard({ item }: { item: ExampleCardProps }) {
+function ExampleCard({ item }: { item: IntroExample }) {
   const barColor =
     item.score >= 90 ? "bg-green-500" :
     item.score >= 70 ? "bg-lime-500" :
@@ -187,6 +178,22 @@ function ExampleCard({ item }: { item: ExampleCardProps }) {
 // ─── Page ─────────────────────────────────────────────────────
 
 export default function IntroPage() {
+  const [items, setItems] = useState<IntroExample[]>(FALLBACK_EXAMPLES);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    introExamples.fetch()
+      .then((res) => {
+        if (res.examples.length > 0) {
+          setItems(res.examples);
+        }
+      })
+      .catch(() => {
+        // fallback to hardcoded FALLBACK_EXAMPLES (already set as default)
+      })
+      .finally(() => setLoaded(true));
+  }, []);
+
   return (
     <div className="min-h-screen">
       {/* ── Hero ───────────────────────────────────────────── */}
@@ -241,10 +248,16 @@ export default function IntroPage() {
           </p>
 
           <div className="grid md:grid-cols-3 gap-4">
-            {examples.map((ex) => (
+            {items.map((ex) => (
               <ExampleCard key={ex.ticker + ex.title} item={ex} />
             ))}
           </div>
+
+          {!loaded && (
+            <div className="text-center mt-6 text-xs text-[var(--text-muted)] animate-pulse">
+              오늘의 공시를 불러오는 중...
+            </div>
+          )}
 
           <div className="flex items-center justify-center gap-2 mt-8 text-xs text-[var(--text-muted)]">
             <Filter size={12} />

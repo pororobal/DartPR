@@ -105,6 +105,18 @@ async def start_poller():
         max_instances=1,
         next_run_time=datetime.now(timezone.utc),
     )
+    # 매일 20:00 KST (11:00 UTC) — 소개페이지 예시 갱신
+    _scheduler.add_job(
+        _run_intro_examples,
+        "cron",
+        hour=11,
+        minute=0,
+        timezone="Asia/Seoul",
+        id="intro_examples_daily",
+        replace_existing=True,
+        coalesce=True,
+        max_instances=1,
+    )
     _scheduler.start()
     _is_running = True
     logger.info(
@@ -559,3 +571,16 @@ async def poll_dart_once():
         await _process_disclosure(item, skip_document=False)
 
     logger.info(f"Poll cycle complete: {len(new_items)} new items processed")
+
+
+# ---------------------------------------------------------------------------
+# Intro examples scheduler
+# ---------------------------------------------------------------------------
+
+async def _run_intro_examples():
+    """Daily job: curate today's disclosures for the intro page."""
+    try:
+        from app.services.intro_examples_generator import run_intro_examples_pipeline
+        await run_intro_examples_pipeline()
+    except Exception:
+        logger.exception("intro examples pipeline failed")

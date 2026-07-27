@@ -206,6 +206,30 @@ export interface NoticeList {
   total: number;
 }
 
+// ─── Intro Examples ────────────────────────────────────────────
+
+export interface IntroExample {
+  ticker: string;
+  company: string;
+  time: string;
+  title: string;
+  score: number;
+  signal: { icon: string; label: string; color: string };
+  summary: string;
+  badge: string;
+}
+
+export interface IntroExamplesResponse {
+  target_date: string;
+  examples: IntroExample[];
+  updated_at: string;
+}
+
+export const introExamples = {
+  fetch: () =>
+    apiFetch<IntroExamplesResponse>("/api/v1/intro/examples"),
+};
+
 export const notices_api = {
   list: (page = 1, perPage = 20) =>
     apiFetch<NoticeList>(`/api/v1/notices?page=${page}&per_page=${perPage}`),

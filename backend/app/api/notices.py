@@ -162,3 +162,33 @@ async def delete_notice(
     if not result.data:
         raise HTTPException(status_code=404, detail="Notice not found")
     return {"message": "Notice deleted"}
+
+
+# ─── Intro examples ──────────────────────────────────────────────
+
+class IntroExamplesResponse(BaseModel):
+    target_date: str
+    examples: list[dict]
+    updated_at: str = ""
+
+
+@router.get("/intro/examples")
+async def get_intro_examples():
+    """Public: get today's curated intro page examples."""
+    supabase = get_supabase()
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    result = (
+        supabase.table("intro_examples")
+        .select("*")
+        .eq("target_date", today)
+        .maybe_single()
+        .execute()
+    )
+    if not result.data:
+        return IntroExamplesResponse(target_date=today, examples=[], updated_at="")
+    row = result.data
+    return IntroExamplesResponse(
+        target_date=row.get("target_date", today),
+        examples=row.get("examples", []),
+        updated_at=row.get("updated_at", ""),
+    )
