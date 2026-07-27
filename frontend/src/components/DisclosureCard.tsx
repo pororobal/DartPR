@@ -294,6 +294,7 @@ export default function DisclosureCard({ item, isAdmin = false }: DisclosureCard
   const isPending = item.llm_status === "PENDING" && !item.llm_summary;
   const isTrap = item.risk_flag != null && item.risk_flag !== "CLEAN";
   const isAdministrative = item.category === "ADMINISTRATIVE";
+  const relatedStatus = item.related_status || "NONE";
 
   const handleAnalyze = async () => {
     if (!item.id) return;
@@ -389,7 +390,37 @@ export default function DisclosureCard({ item, isAdmin = false }: DisclosureCard
         )}
       </div>
 
-      {/* ── Row 3b: Cerebras Insight (ambiguous disclosures) ── */}
+      {/* ── Row 3b: Related Disclosure Analysis ──────────── */}
+      {relatedStatus === "ANALYZING" && (
+        <div className="mt-2 bg-blue-900/10 border border-blue-500/20 rounded-lg p-3">
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <span className="text-xs">⚡</span>
+            <span className="text-[10px] font-bold text-blue-400 tracking-wider uppercase">관련공시 분석중입니다...</span>
+          </div>
+          <div className="space-y-1.5">
+            <div className="shimmer h-3 w-full rounded" />
+            <div className="shimmer h-3 w-2/3 rounded" />
+          </div>
+        </div>
+      )}
+      {relatedStatus === "MERGED" && item.merged_summary && (
+        <div className="mt-2 bg-[var(--bg-primary)] border border-blue-500/30 rounded-lg p-3">
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <span className="text-xs">📋</span>
+            <span className="text-[10px] font-bold text-blue-400 tracking-wider uppercase">관련공시 포함 통합 분석</span>
+            {item.merged_sentiment === "BENEFICIAL" && <span className="text-[10px] text-green-400">· 긍정</span>}
+            {item.merged_sentiment === "ADVERSE" && <span className="text-[10px] text-red-400">· 부정</span>}
+            {item.merged_horizon === "LONG_TERM" && <span className="text-[10px] text-[var(--text-muted)]">· 장기</span>}
+            {item.merged_horizon === "SHORT_TERM" && <span className="text-[10px] text-[var(--text-muted)]">· 단기</span>}
+            {item.merged_confidence && <span className="text-[10px] text-[var(--text-muted)]">· 신뢰도 {item.merged_confidence}</span>}
+          </div>
+          <p className="text-sm text-[var(--text-secondary)] leading-relaxed whitespace-pre-wrap">
+            {item.merged_summary}
+          </p>
+        </div>
+      )}
+
+      {/* ── Row 3c: Cerebras Insight (ambiguous disclosures) ── */}
       {item.cerebras_sentiment && item.cerebras_reason && (
         <div className="mt-2 bg-purple-900/10 border border-purple-500/20 rounded-lg p-3">
           <div className="flex items-center gap-1.5 mb-1.5">

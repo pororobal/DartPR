@@ -36,6 +36,13 @@ class DisclosureResponse(BaseModel):
     key_metrics: Optional[List[KeyMetricItem]] = None
     llm_status: str = "PENDING"
     created_at: Optional[datetime] = None
+    # 관련공시 컨텍스트 연결
+    related_status: str = "NONE"
+    merged_summary: Optional[str] = None
+    merged_sentiment: Optional[str] = None
+    merged_horizon: Optional[str] = None
+    merged_confidence: Optional[str] = None
+    related_disclosures: Optional[List[dict]] = None
 
 
 class DisclosureListResponse(BaseModel):

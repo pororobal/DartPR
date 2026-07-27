@@ -345,7 +345,15 @@ async def _enrich_with_llm(
 ):
     try:
         from app.services.groq_service import analyze_disclosure as groq_analyze
+        from app.services.context_linker import (
+            parse_related_disclosures,
+            find_in_supabase,
+            build_merged_prompt,
+        )
 
+        supabase = get_supabase()
+
+        # Step 1: 기본 분석 (현행)
         llm_result = await groq_analyze(
             ticker=ticker,
             company_name=corp_name,
@@ -361,7 +369,6 @@ async def _enrich_with_llm(
             "llm_status": "DONE",
         })
 
-        supabase = get_supabase()
         supabase.table("disclosures").update(update_data).eq(
             "dart_rcept_no", rcept_no
         ).execute()
@@ -369,6 +376,83 @@ async def _enrich_with_llm(
         logger.info(
             f"LLM enrichment done for {rcept_no}: "
             f"summary_len={len(llm_result.llm_summary)}"
+        )
+
+        # Step 2: 관련공시 파싱
+        related = parse_related_disclosures(raw_text)
+        if not related:
+            return  # 관련공시 없음 → 종료
+
+        # Step 3: ANALYZING 상태 (Frontend가 "분석중입니다" 표시)
+        supabase.table("disclosures").update({
+            "related_status": "ANALYZING",
+        }).eq("dart_rcept_no", rcept_no).execute()
+
+        # Step 4: Supabase에서 과거 공시 조회
+        related = await find_in_supabase(related, ticker, supabase)
+        matched = [r for r in related if r.rcept_no]
+        if not matched:
+            logger.info(
+                f"Related disclosures found for {rcept_no} but none in DB"
+            )
+            supabase.table("disclosures").update({
+                "related_status": "NONE",
+            }).eq("dart_rcept_no", rcept_no).execute()
+            return
+
+        # Step 5: 가장 최근 2건만 병합 (토큰 절약)
+        matched = sorted(matched, key=lambda x: x.date)[-2:]
+
+        # Step 6: 통합 분석 (brief 모드, 120 tokens)
+        from app.services.groq_service import analyze_disclosure as groq_merge
+
+        merged_prompt = build_merged_prompt(
+            title=title,
+            summary=llm_result.llm_summary,
+            sentiment=getattr(llm_result, "_cerebras_sentiment", "NEUTRAL") or "NEUTRAL",
+            horizon=llm_result._cerebras_horizon if hasattr(llm_result, "_cerebras_horizon") else "SHORT_TERM",
+            related=matched,
+        )
+
+        merged_result = await groq_merge(
+            ticker=ticker,
+            company_name=corp_name,
+            title=f"{title} (관련공시 포함)",
+            raw_text=merged_prompt,
+            brief=True,
+        )
+
+        # Step 7: MERGED 저장 (JSON 파싱)
+        merged_summary = merged_result.llm_summary
+        merged_sentiment = "NEUTRAL"
+        merged_horizon = "SHORT_TERM"
+        merged_confidence = "LOW"
+
+        try:
+            import json
+            parsed = json.loads(merged_summary)
+            merged_summary = parsed.get("merged_summary", merged_summary)
+            merged_sentiment = parsed.get("impact_direction", "NEUTRAL")
+            merged_horizon = parsed.get("horizon", "SHORT_TERM")
+            merged_confidence = parsed.get("confidence", "LOW")
+        except (json.JSONDecodeError, TypeError):
+            pass  # fallback: 문자열 그대로 사용
+
+        supabase.table("disclosures").update(_clean_payload({
+            "related_status": "MERGED",
+            "merged_summary": _clean_text(merged_summary, limit=8000),
+            "merged_sentiment": merged_sentiment,
+            "merged_horizon": merged_horizon,
+            "merged_confidence": merged_confidence,
+            "related_disclosures": [
+                {"date": r.date, "title": r.title[:100], "rcept_no": r.rcept_no}
+                for r in matched
+            ],
+        })).eq("dart_rcept_no", rcept_no).execute()
+
+        logger.info(
+            f"Merged analysis done for {rcept_no}: {len(matched)} related "
+            f"→ sentiment={merged_sentiment} horizon={merged_horizon}"
         )
 
     except Exception as e:

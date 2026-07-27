@@ -113,6 +113,12 @@ export interface DisclosureItem {
   key_metrics: KeyMetric[] | null;
   llm_status: string;
   created_at: string | null;
+  related_status?: string;
+  merged_summary?: string | null;
+  merged_sentiment?: string | null;
+  merged_horizon?: string | null;
+  merged_confidence?: string | null;
+  related_disclosures?: Array<{ date: string; title: string; rcept_no: string }> | null;
 }
 
 export interface DisclosureList {
