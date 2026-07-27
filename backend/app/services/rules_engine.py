@@ -90,6 +90,7 @@ _ADMIN_PATTERNS = [
     r"사외이사의\s*해임",
     r"사외이사의\s*중도퇴임",
     "영업보고서",
+    "기재정정",
 ]
 
 
@@ -156,7 +157,7 @@ def _extract_keywords(text: str) -> dict:
     )
     flags["is_third_party"] = bool(re.search(r"(제3자배정|3자배정)", text))
     flags["cb_refixing"] = bool(
-        re.search(r"(전환가액\s*조정|리픽싱|전환가액\s*하향)", text)
+        re.search(r"(전환가액\S{0,3}조정|리픽싱|전환가액\s*하향)", text)
     )
     flags["capital_raise_withdrawn"] = bool(
         re.search(r"(유상증자\s*철회|공모\s*철회|증자\s*철회)", text)
@@ -747,13 +748,13 @@ def _score_capital_raising(keywords: dict, ticker: str = None, supabase=None) ->
     if keywords.get("exercise_price_up"):
         return (55, "CAPITAL_RAISING_CB_PRICE_UP", "", "")
 
+    # CB 조기상환/만기전취득 — 긍정 (전환청구보다 먼저 체크)
+    if keywords.get("cb_early_redemption"):
+        return (65, "CAPITAL_RAISING_CB_EARLY_REDEEM", "", "")
+
     # CB 전환청구 — 풋옵션 행사 = 희석 발생
     if keywords.get("cb_conversion_exercised"):
         return (8, "CAPITAL_RAISING_CB_CONVERTED", "", "")
-
-    # CB 조기상환/만기전취득 — 긍정
-    if keywords.get("cb_early_redemption"):
-        return (65, "CAPITAL_RAISING_CB_EARLY_REDEEM", "", "")
 
     # 신주인수권(BW) 행사
     if keywords.get("warrant_exercise"):
