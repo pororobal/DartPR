@@ -3,8 +3,57 @@
 import Link from "next/link";
 import {
   Zap, BarChart3, Search, Shield, Brain, Clock, ArrowRight,
-  TrendingUp, FileText, Activity, ChevronRight, AlertTriangle, Target
+  TrendingUp, FileText, Activity, ChevronRight, AlertTriangle, Target,
+  Filter, Sparkles, PieChart
 } from "lucide-react";
+
+// ─── Real examples from today's feed ──────────────────────────
+
+interface ExampleCardProps {
+  ticker: string;
+  company: string;
+  time: string;
+  title: string;
+  score: number;
+  signal: { icon: string; label: string; color: string };
+  summary: string;
+  badge: string;
+}
+
+const examples: ExampleCardProps[] = [
+  {
+    ticker: "035420",
+    company: "NAVER",
+    time: "07. 27. 오후 04:50",
+    title: "주식소각결정",
+    score: 90,
+    signal: { icon: "🟢", label: "단기 긍정 신호", color: "text-green-400" },
+    summary: "NAVER는 보통주 4,901,094주(전체의 3.1%)를 8월 3일 자사주 소각하기로 이사회 결의했다. 배당가능이익 범위 내 진행으로 자본금 감소는 없으며, 주당 가치에 긍정적인 영향을 미칠 수 있다.",
+    badge: "주주환원",
+  },
+  {
+    ticker: "185750",
+    company: "종근당",
+    time: "07. 27. 오후 06:27",
+    title: "CKD-339 식약처 3상 임상시험 계획 승인",
+    score: 95,
+    signal: { icon: "🟢", label: "장기 긍정 신호", color: "text-green-400" },
+    summary: "종근당은 고혈압 치료제 CKD-339에 대해 식약처가 제3상 임상시험 계획을 승인했다. 300명 대상 36개월 임상 돌입. 신약 개발 본궤도 진입으로 장기 사업 성장에 기여할 구조적 이벤트.",
+    badge: "바이오",
+  },
+  {
+    ticker: "289010",
+    company: "아이스크림에듀",
+    time: "07. 27. 오후 06:23",
+    title: "관리종목지정우려 (시가총액 200억원 미달)",
+    score: 8,
+    signal: { icon: "🔴", label: "단기 부정 신호", color: "text-red-400" },
+    summary: "시가총액 200억원 미달로 관리종목 지정 우려. 상장 유지에 위험이 따르는 신호.",
+    badge: "상장위험",
+  },
+];
+
+// ─── Static content ──────────────────────────────────────────
 
 const problems = [
   {
@@ -26,9 +75,9 @@ const problems = [
 
 const features = [
   {
-    icon: Zap,
-    title: "실시간 공시 수집",
-    desc: "OpenDART API와 30초 간격 폴링으로 공시가 올라오는 즉시 캡처합니다. 놓치는 공시 없이 모든 신호를 포착하세요.",
+    icon: Filter,
+    title: "핵심 공시 선별",
+    desc: "시세에 영향을 주는 주목할 만한 공시만 골라서 실시간 피드에 표시. 대량보유신고·일괄신고 등 노이즈는 자동 필터링합니다.",
     color: "text-blue-400",
     bg: "bg-blue-900/10",
     border: "border-blue-900/30",
@@ -58,7 +107,7 @@ const features = [
     border: "border-red-900/30",
   },
   {
-    icon: Brain,
+    icon: Sparkles,
     title: "AI가 써주는 요약",
     desc: "공시 원문을 AI가 읽고 핵심만 2~3문장으로 요약. 긴 원문을 일일이 읽지 않고도 공시의 핵심을 파악하세요.",
     color: "text-teal-400",
@@ -78,15 +127,70 @@ const features = [
 const steps = [
   { num: "01", title: "공시 수집", desc: "OpenDART에서 새로운 공시를 30초 간격으로 24시간 자동 수집합니다.", icon: FileText },
   { num: "02", title: "AI 분석",     desc: "카테고리 분류 → 키워드 분석 → DVI 점수 산출 → 위험 탐지까지 1초 미만.", icon: Brain },
-  { num: "03", title: "실시간 전달", desc: "점수와 함께 실시간 피드에 즉시 노출. 80점↑ 고impact 공시는 LLM 요약까지 자동 생성.", icon: Zap },
+  { num: "03", title: "실시간 전달", desc: "점수와 함께 실시간 피드에 즉시 노출. 시세에 영향 주는 핵심 공시만 선별하여 보여줍니다.", icon: Filter },
 ];
+
+
+// ─── ExampleCard component ────────────────────────────────────
+
+function ExampleCard({ item }: { item: ExampleCardProps }) {
+  const barColor =
+    item.score >= 90 ? "bg-green-500" :
+    item.score >= 70 ? "bg-lime-500" :
+    item.score >= 40 ? "bg-yellow-500" :
+    item.score > 0   ? "bg-orange-500" : "bg-red-500";
+
+  const scoreTextColor =
+    item.score >= 90 ? "text-green-400" :
+    item.score >= 70 ? "text-lime-400" :
+    item.score >= 40 ? "text-yellow-400" :
+    item.score > 0   ? "text-orange-300" : "text-red-400";
+
+  return (
+    <div className="card p-4 border border-[var(--border-color)] hover:border-[var(--text-muted)] transition-all">
+      {/* Header */}
+      <div className="flex items-start gap-3 mb-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-mono text-xs font-bold text-[var(--accent-blue)]">[{item.ticker}]</span>
+            <span className="text-sm font-semibold text-white">{item.company}</span>
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded border border-purple-900/30 text-purple-400 bg-purple-900/10">
+              {item.badge}
+            </span>
+            <span className="text-[10px] text-[var(--text-muted)] ml-auto">{item.time}</span>
+          </div>
+          <p className="text-xs text-[var(--text-secondary)] mt-1 leading-snug line-clamp-2">{item.title}</p>
+        </div>
+        {/* DVI */}
+        <div className="shrink-0 w-14 text-center">
+          <div className="text-[9px] font-mono font-bold text-[var(--text-muted)]">DVI</div>
+          <div className={`text-lg font-bold font-mono leading-none ${scoreTextColor}`}>{item.score}</div>
+          <div className="w-full h-1 rounded-full bg-gray-800 mt-0.5 overflow-hidden">
+            <div className={`h-full rounded-full ${barColor}`} style={{ width: `${item.score}%` }} />
+          </div>
+        </div>
+      </div>
+      {/* Signal */}
+      <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-opacity-20 ${item.signal.color} bg-green-900/10`}>
+        <span>{item.signal.icon}</span>
+        <span className={item.signal.color}>{item.signal.label}</span>
+      </div>
+      {/* Summary */}
+      <p className="text-xs text-[var(--text-secondary)] mt-2 leading-relaxed border-t border-[var(--border-color)] pt-2">
+        {item.summary}
+      </p>
+    </div>
+  );
+}
+
+
+// ─── Page ─────────────────────────────────────────────────────
 
 export default function IntroPage() {
   return (
     <div className="min-h-screen">
       {/* ── Hero ───────────────────────────────────────────── */}
       <section className="relative overflow-hidden border-b border-[var(--border-color)]">
-        {/* Background glow */}
         <div className="absolute inset-0 pointer-events-none">
           <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] rounded-full bg-[var(--accent-mint)]/5 blur-[120px]" />
           <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-purple-500/5 blur-[100px]" />
@@ -104,8 +208,9 @@ export default function IntroPage() {
           </h1>
 
           <p className="text-lg text-[var(--text-secondary)] mt-6 max-w-xl leading-relaxed">
-            DartPR은 모든 OpenDART 공시를 실시간 수집하고 AI가 분석합니다.
-            카테고리 분류, 중요도 점수, 위험 탐지로 단 한 건의 핵심 공시도 놓치지 마세요.
+            DartPR은 모든 OpenDART 공시를 실시간 수집하고 AI로 분석합니다.
+            시세에 영향을 주는 핵심 공시만 선별하여 보여주며,
+            카테고리 분류, 중요도 점수, 위험 탐지로 단 한 건의 중요한 신호도 놓치지 않게 도와줍니다.
           </p>
 
           <div className="flex items-center gap-4 mt-8">
@@ -121,42 +226,42 @@ export default function IntroPage() {
         </div>
       </section>
 
-      {/* ── Problem ────────────────────────────────────────── */}
+      {/* ── Live examples ─────────────────────────────────── */}
       <section className="border-b border-[var(--border-color)]">
         <div className="max-w-5xl mx-auto px-4 py-20">
-          <div className="text-center mb-12">
-            <h2 className="text-2xl md:text-3xl font-bold text-white">
-              공시 분석, 왜 어려운가요?
-            </h2>
+          <div className="text-center mb-3">
+            <span className="text-xs font-bold text-[var(--accent-mint)] tracking-widest uppercase">실시간 피드 샘플</span>
           </div>
-          <div className="grid md:grid-cols-3 gap-6">
-            {problems.map((p) => (
-              <div key={p.title} className="card p-6 text-center">
-                <div className="w-12 h-12 rounded-xl bg-red-900/10 flex items-center justify-center mx-auto mb-4">
-                  <p.icon size={24} className="text-red-400" />
-                </div>
-                <h3 className="text-base font-bold text-white mb-2">{p.title}</h3>
-                <p className="text-sm text-[var(--text-secondary)] leading-relaxed">{p.desc}</p>
-              </div>
+          <h2 className="text-2xl md:text-3xl font-bold text-white text-center mb-2">
+            오늘 DART에 올라온 공시 중에서
+          </h2>
+          <p className="text-sm text-[var(--text-secondary)] text-center mb-10 max-w-lg mx-auto">
+            DartPR은 하루 수백 건의 공시 중 시세에 영향을 줄 수 있는 공시만 골라서 보여줍니다.
+            아래는 오늘 실시간 피드에 실제로 표시된 공시들입니다.
+          </p>
+
+          <div className="grid md:grid-cols-3 gap-4">
+            {examples.map((ex) => (
+              <ExampleCard key={ex.ticker + ex.title} item={ex} />
             ))}
           </div>
-          <div className="text-center mt-8">
-            <Link href="/live" className="text-sm text-[var(--accent-mint)] hover:text-white transition-colors inline-flex items-center gap-1">
-              DartPR이 해결하는 방법 보기
-              <ChevronRight size={14} />
-            </Link>
+
+          <div className="flex items-center justify-center gap-2 mt-8 text-xs text-[var(--text-muted)]">
+            <Filter size={12} />
+            단순 대량보유 신고, 일괄신고추가서류, 채권유동화 등 시세와 무관한 공시는 자동으로 걸러집니다.
           </div>
         </div>
       </section>
 
       {/* ── How it works ──────────────────────────────────── */}
       <section className="max-w-5xl mx-auto px-4 py-20">
-        <div className="text-center mb-12">
-          <h2 className="text-2xl md:text-3xl font-bold text-white">3초면 완료되는 분석</h2>
-          <p className="text-sm text-[var(--text-secondary)] mt-2">
-            분석가가 10분 걸릴 일을 DartPR은 1초면 끝냅니다
-          </p>
+        <div className="text-center mb-3">
+          <span className="text-xs font-bold text-[var(--accent-mint)] tracking-widest uppercase">작동 방식</span>
         </div>
+        <h2 className="text-2xl md:text-3xl font-bold text-white text-center mb-2">3초면 완료되는 분석</h2>
+        <p className="text-sm text-[var(--text-secondary)] text-center mb-12">
+          분석가가 10분 걸릴 일을 DartPR은 1초면 끝냅니다
+        </p>
 
         <div className="grid md:grid-cols-3 gap-6">
           {steps.map((step, i) => (
@@ -177,13 +282,37 @@ export default function IntroPage() {
         </div>
       </section>
 
-      {/* ── Features ──────────────────────────────────────── */}
-      <section className="border-t border-[var(--border-color)]">
+      {/* ── Problem ────────────────────────────────────────── */}
+      <section className="border-t border-b border-[var(--border-color)]">
         <div className="max-w-5xl mx-auto px-4 py-20">
-          <div className="text-center mb-12">
-            <h2 className="text-2xl md:text-3xl font-bold text-white">핵심 기능</h2>
-            <p className="text-sm text-[var(--text-secondary)] mt-2">DartPR이 제공하는 모든 분석 도구</p>
+          <div className="text-center mb-3">
+            <span className="text-xs font-bold text-[var(--accent-mint)] tracking-widest uppercase">Problem</span>
           </div>
+          <h2 className="text-2xl md:text-3xl font-bold text-white text-center mb-10">
+            공시 분석, 왜 어려운가요?
+          </h2>
+          <div className="grid md:grid-cols-3 gap-6">
+            {problems.map((p) => (
+              <div key={p.title} className="card p-6 text-center">
+                <div className="w-12 h-12 rounded-xl bg-red-900/10 flex items-center justify-center mx-auto mb-4">
+                  <p.icon size={24} className="text-red-400" />
+                </div>
+                <h3 className="text-base font-bold text-white mb-2">{p.title}</h3>
+                <p className="text-sm text-[var(--text-secondary)] leading-relaxed">{p.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Features ──────────────────────────────────────── */}
+      <section className="border-b border-[var(--border-color)]">
+        <div className="max-w-5xl mx-auto px-4 py-20">
+          <div className="text-center mb-3">
+            <span className="text-xs font-bold text-[var(--accent-mint)] tracking-widest uppercase">Features</span>
+          </div>
+          <h2 className="text-2xl md:text-3xl font-bold text-white text-center mb-2">핵심 기능</h2>
+          <p className="text-sm text-[var(--text-secondary)] text-center mb-10">DartPR이 제공하는 모든 분석 도구</p>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
             {features.map((f) => (
@@ -203,7 +332,7 @@ export default function IntroPage() {
       </section>
 
       {/* ── CTA ────────────────────────────────────────────── */}
-      <section className="border-t border-[var(--border-color)]">
+      <section>
         <div className="max-w-3xl mx-auto px-4 py-20 text-center">
           <h2 className="text-2xl md:text-3xl font-bold text-white">
             오늘부터 공시를 AI에게 맡기세요
@@ -223,7 +352,7 @@ export default function IntroPage() {
           </div>
           <p className="text-xs text-[var(--text-muted)] mt-6">
             더 이상 하루에도 수백 건 쏟아지는 공시 원문을 일일이 읽지 마세요.
-            DartPR이 먼저 읽고, 분석하고, 알려드립니다.
+            DartPR이 먼저 읽고, 분석하고, 골라서 알려드립니다.
           </p>
         </div>
       </section>
