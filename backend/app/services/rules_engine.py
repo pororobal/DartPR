@@ -275,6 +275,20 @@ def _extract_keywords(text: str) -> dict:
             except ValueError:
                 pass
 
+    # 소각 주식 수 (자사주 소각 규모 판단용)
+    m = re.search(
+        r"보통주식\s*\(주\)\s*(\d[\d,]*)", text
+    )  # tabular: "보통주식 (주)   1"
+    if not m:
+        m = re.search(
+            r"보통주\s*(\d[\d,]*)\s*주", text
+        )  # running: "보통주 1,643,835주"
+    if m:
+        try:
+            flags["cancellation_shares"] = int(m.group(1).replace(",", ""))
+        except ValueError:
+            pass
+
     # EARNINGS
     flags["loss_to_profit"] = bool(re.search(r"흑자전환", text))
     flags["profit_to_loss"] = bool(re.search(r"적자전환", text))
@@ -962,6 +976,11 @@ def _score_shareholder_return(keywords: dict, ticker: str = None, supabase=None)
 
     # 자사주 취득+소각 (시장에 자사주 매입+소각 = 긍정)
     if buyback_cancel:
+        cancel_shares = keywords.get("cancellation_shares", 0)
+        if cancel_shares > 0 and cancel_shares <= 10:
+            return (40, "SHAREHOLDER_TRIVIAL_CANCEL", "", "단수주소각")
+        elif cancel_shares > 0 and cancel_shares <= 500:
+            return (60, "SHAREHOLDER_SMALL_CANCEL", "", "소규모소각")
         if is_first_buyback:
             return (90, "SHAREHOLDER_FIRST_BUYBACK_CANCEL", "", "취득+소각")
         else:
@@ -1147,6 +1166,7 @@ _SHORT_TERM_RULES = {
     "RISK_MARKET_WARNING_DANGER", "RISK_MARKET_WARNING_CAUTION",
     "RISK_MARKET_WARNING_ATTENTION",
     "SHAREHOLDER_FIRST_BUYBACK_CANCEL", "SHAREHOLDER_REPEAT_BUYBACK_CANCEL",
+    "SHAREHOLDER_TRIVIAL_CANCEL", "SHAREHOLDER_SMALL_CANCEL",
     "SHAREHOLDER_BUYBACK_ONLY", "SHAREHOLDER_OPEN_MARKET_BUYBACK",
     "SHAREHOLDER_DISPOSAL_OPERATING", "SHAREHOLDER_DISPOSAL_STOCK_OPTION",
     "SHAREHOLDER_TREASURY_COLLATERAL", "SHAREHOLDER_MAJOR_PLEDGE",

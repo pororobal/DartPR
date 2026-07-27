@@ -68,6 +68,8 @@ const SUB_RULE_DESC: Record<string, string> = {
   "BIOTECH_PHASE3_NDA":                   "임상 3상/품목허가 신청 — 규제 승인 목전",
   "SHAREHOLDER_FIRST_BUYBACK_CANCEL":     "최초 자사주 취득+소각 — 강력한 주주환원 신호",
   "SHAREHOLDER_REPEAT_BUYBACK_CANCEL":    "반복 자사주 소각 — 지속적인 주주환원 정책",
+  "SHAREHOLDER_TRIVIAL_CANCEL":           "단수주 소각 — 사실상 영향 없음",
+  "SHAREHOLDER_SMALL_CANCEL":             "소규모 소각 — 제한적 주주환원 효과",
   "SHAREHOLDER_BUYBACK_ONLY":             "자사주 취득 — 주가 안정화 의지",
   "SHAREHOLDER_OPEN_MARKET_BUYBACK":      "자사주 공개매수 — 가장 강력한 주가 부양 신호",
   "EARNINGS_LOSS_TO_PROFIT_NO_HISTORY":   "흑자전환 — 수익성 개선 신호",
@@ -191,7 +193,7 @@ export function getNature(item: DisclosureItem): DisclosureNature {
 
   const s = item.dvi_score ?? 0;
   if (s >= 90) return "positive";
-  if (s >= 40) return "neutral";
+  if (s >= 30) return "neutral";
   return "negative";
 }
 
@@ -222,7 +224,7 @@ function getSignal(item: DisclosureItem): Signal {
     return { icon: "🔴", label: `${prefix}부정 신호`, color: "text-red-400", bg: "bg-red-900/20", horizon };
   }
 
-  if (s >= 40)
+  if (s >= 30)
     return { icon: "⚪", label: "중립", color: "text-gray-400", bg: "bg-gray-800/40" };
 
   return { icon: "🟠", label: "주의", color: "text-orange-400", bg: "bg-orange-900/20" };
