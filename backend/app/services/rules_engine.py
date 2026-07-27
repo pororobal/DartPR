@@ -77,6 +77,7 @@ _ADMIN_PATTERNS = [
     r"기업설명회",
     r"IR\s*개최",
     "특수관계인과의거래",
+    "특수관계인과의",
     r"주식매수선택권\s*부여",
     "합병등종료보고서",
     "자기주식취득결과보고서",
@@ -229,7 +230,7 @@ def _extract_keywords(text: str) -> dict:
         except ValueError:
             pass
 
-    m = re.search(r"(최근\s*매출액\s*대비|매출액\s*대비).*?(\d+(?:\.\d+)?)", text)
+    m = re.search(r"(최근\s*매출액\s*대비|매출액\s*대비|매출액대비).*?(\d+(?:\.\d+)?)", text)
     if m:
         try:
             flags["revenue_ratio"] = float(m.group(2))
@@ -486,6 +487,7 @@ def _extract_keywords(text: str) -> dict:
     flags["facility_investment"] = bool(
         re.search(r"(시설투자|신규시설|생산시설.*증설)", text)
     )
+    flags["serious_accident"] = bool(re.search(r"중대재해", text))
 
     return flags
 
@@ -567,11 +569,13 @@ def guess_category(title: str, raw_text: str, keywords: dict = None) -> tuple[st
         return ("BIOTECH", keywords)
 
     # M&A / governance (SHAREHOLDER_RETURN used for these too)
-    if any(kw in t for kw in ["합병", "분할", "최대주주변경"]):
+    if any(kw in t for kw in ["합병", "분할", "병합", "최대주주변경"]):
         return ("SHAREHOLDER_RETURN", keywords)
     if any(kw in t for kw in ["소송", "가처분"]):
         return ("SHAREHOLDER_RETURN", keywords)
-    if any(kw in t for kw in ["대량보유", "주식등의대량보유", "지분"]):
+    if any(kw in t for kw in ["주식등의대량보유", "대량보유"]):
+        return ("OTHER", keywords)  # reroute → MA_BULK_HOLDING_*
+    if "지분" in t:
         return ("SHAREHOLDER_RETURN", keywords)
 
     # Fair Disclosure / 조회공시
@@ -595,6 +599,9 @@ def guess_category(title: str, raw_text: str, keywords: dict = None) -> tuple[st
     # 상호변경 → SHAREHOLDER_RETURN
     if any(kw in t for kw in ["상호변경"]):
         return ("SHAREHOLDER_RETURN", keywords)
+
+    if any(kw in t for kw in ["비유동자산취득"]):
+        return ("CAPITAL_RAISING", keywords)
 
     # 채무인수/채무보증/담보제공 → SHAREHOLDER_RETURN (M&A scoring)
     if any(kw in t for kw in ["채무인수", "채무보증"]):
@@ -1252,6 +1259,44 @@ def _is_ambiguous_title(title: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# LLM routing decision
+# ---------------------------------------------------------------------------
+
+def _needs_llm(score: int, category: str, sub_rule_id: str, title: str, keywords: dict) -> bool:
+    """Determine whether this disclosure needs Groq LLM analysis.
+
+    Called after category reroute (4-a), so sub_rule_id reflects final routing.
+    Returns True when LLM analysis is needed (summary or re-evaluation).
+    """
+    # (1) 0~29: 규칙 기반으로 확정된 저신뢰 구간
+    if score < 30:
+        return False
+    # (2) 위험 신호는 규칙으로 충분
+    if sub_rule_id in ("DELISTING_RISK",):
+        return False
+    # (3) 정정공시는 규칙으로 충분
+    if "[기재정정]" in title:
+        return False
+    # (4) 모호 제목 → 무조건 LLM
+    if _is_ambiguous_title(title):
+        return True
+    # (5) 30~59점: 선별적 LLM — 키워드로 확신 불가한 케이스
+    if 30 <= score <= 59:
+        # 4-a reroute도 실패한 진짜 미분류
+        if sub_rule_id == "OTHER_DEFAULT":
+            return True
+        # BUSINESS_CONTRACT with revenue_ratio unknown
+        if category == "BUSINESS_CONTRACT" and "revenue_ratio" not in keywords:
+            return True
+        # CAPITAL_RAISING with no specific purpose
+        if category == "CAPITAL_RAISING" and sub_rule_id == "CAPITAL_RAISING_GENERAL":
+            return True
+        return False
+    # (6) 60+: 요약용 LLM
+    return True
+
+
+# ---------------------------------------------------------------------------
 # Main evaluation pipeline
 # ---------------------------------------------------------------------------
 
@@ -1340,6 +1385,16 @@ def evaluate_disclosure(
             skip_llm=True,
             signal_horizon="SHORT_TERM",
         )
+    if keywords.get("serious_accident"):
+        return ScoreResult(
+            category="DELISTING_RISK",
+            sub_rule_id="RISK_SERIOUS_ACCIDENT",
+            dvi_score=10,
+            impact_level="HIGH_IMPACT",
+            is_feed_visible=True,
+            skip_llm=False,
+            signal_horizon="SHORT_TERM",
+        )
 
     # 시장경보 early return
     if keywords.get("market_warning_danger", False):
@@ -1375,7 +1430,7 @@ def evaluate_disclosure(
 
     # 자율공시 보너스 — 자발적 공시 = 경영 자신감 신호
     voluntary_bonus = 0
-    if "[자율공시]" in title:
+    if "[자율공시]" in title or "(자율공시)" in title:
         voluntary_bonus = 10
 
     category, _ = guess_category(title, raw_text, keywords)
@@ -1410,10 +1465,10 @@ def evaluate_disclosure(
             signal_horizon="SHORT_TERM",
         )
 
-    # Step 5: Determine visibility + LLM (layered by score)
+    # Step 5: Determine visibility + LLM (layered by score + context)
     is_feed_visible = score >= 60
-    skip_llm = score < 60     # No AI analysis
-    # LLM: 80+ full summary, 60-79 short summary (handled by caller)
+    skip_llm = not _needs_llm(score, category, sub_rule_id, title, keywords)
+    # LLM: 80+ full summary, 60-79 short summary, 30-59 selective (handled by caller)
 
     horizon = _assign_signal_horizon(sub_id, category)
     ambiguous = _is_ambiguous_title(title) and category in ("OTHER", "ADMINISTRATIVE")
@@ -1470,5 +1525,11 @@ def _route_category_scoring(
     if category == "DELISTING_RISK":
         return {"score": 0, "sub_id": "DELISTING_RISK", "risk_flag": "HIGH_RISK_TRAP"}
 
-    # OTHER / fallback
+    # OTHER / fallback — try M&A scorer first (recovers 12 dead code patterns)
+    ma_s, ma_sid, risk, st = _score_shareholder_ma(keywords, ticker, supabase)
+    if ma_sid != "MA_GENERAL":
+        return {"score": ma_s, "sub_id": ma_sid, "risk_flag": risk, "sub_type": st}
+    sh_s, sh_sid, risk, st = _score_shareholder_return(keywords, ticker, supabase)
+    if sh_sid != "SHAREHOLDER_GENERAL":
+        return {"score": sh_s, "sub_id": sh_sid, "risk_flag": risk, "sub_type": st}
     return {"score": 30, "sub_id": "OTHER_DEFAULT"}

@@ -189,7 +189,7 @@ async def analyze_disclosure(
 
     model = settings.groq_model
     system_prompt = BRIEF_ANALYSIS_PROMPT if brief else FULL_ANALYSIS_PROMPT
-    max_tokens = 150 if brief else 1200
+    max_tokens = 120 if brief else 800
 
     try:
         async with _llm_semaphore:
@@ -247,7 +247,7 @@ async def analyze_ambiguity(
                     {"role": "user", "content": _build_user_message(ticker, company_name, title, raw_text)},
                 ],
                 temperature=0.1,
-                max_tokens=400,
+                max_tokens=300,
                 response_format={"type": "json_object"},
             )
 
