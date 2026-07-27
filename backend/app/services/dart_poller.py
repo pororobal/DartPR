@@ -304,6 +304,21 @@ async def _process_disclosure(item: dict, skip_document: bool = False):
             f"Inserted disclosure {rcept_no}: {corp_name} - {title[:60]}"
             f" (score={score_result.dvi_score}, feed={score_result.is_feed_visible})"
         )
+
+        # Audit logging: 30~59점 구간 monitoring
+        if 30 <= score_result.dvi_score <= 59:
+            try:
+                supabase.table("scoring_audit").insert({
+                    "disclosure_id": rcept_no,
+                    "title": title[:200],
+                    "rule_score": score_result.dvi_score,
+                    "rule_category": score_result.category,
+                    "rule_sub_rule_id": score_result.sub_rule_id,
+                    "feed_visible": score_result.is_feed_visible,
+                    "llm_triggered": not score_result.skip_llm,
+                }).execute()
+            except Exception as audit_e:
+                logger.debug(f"Audit log skipped for {rcept_no}: {audit_e}")
     except Exception as e:
         logger.error(f"Supabase insert failed for {rcept_no}: {e}")
         return

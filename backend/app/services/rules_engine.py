@@ -277,6 +277,17 @@ def _extract_keywords(text: str) -> dict:
             except ValueError:
                 pass
 
+    # 자사주 취득 금액 (원 단위)
+    m = re.search(r"(취득금액|취득예정금액|매입금액).*?(\d[\d,]*)\s*(억|원)", text)
+    if m:
+        try:
+            val = int(m.group(2).replace(",", ""))
+            if m.group(3) == "억":
+                val *= 100000000
+            flags["buyback_amount"] = val
+        except ValueError:
+            pass
+
     # 소각 주식 수 (자사주 소각 규모 판단용)
     m = re.search(
         r"보통주식\s*\(주\)\s*(\d[\d,]*)", text
@@ -488,6 +499,28 @@ def _extract_keywords(text: str) -> dict:
         re.search(r"(시설투자|신규시설|생산시설.*증설)", text)
     )
     flags["serious_accident"] = bool(re.search(r"중대재해", text))
+
+    # 자기자본 — 회사 규모 proxy (원 단위로 정규화)
+    m = re.search(r"자기자본.*?(\d[\d,]*)\s*(억|원)", text)
+    if m:
+        try:
+            val = int(m.group(1).replace(",", ""))
+            if m.group(2) == "억":
+                val *= 100000000
+            flags["equity_amount"] = val
+        except ValueError:
+            pass
+
+    # 증자/발행/조달 금액 (원 단위로 정규화)
+    m = re.search(r"(증자금액|발행금액|조달금액).*?(\d[\d,]*)\s*(억|원)", text)
+    if m:
+        try:
+            val = int(m.group(2).replace(",", ""))
+            if m.group(3) == "억":
+                val *= 100000000
+            flags["raise_amount"] = val
+        except ValueError:
+            pass
 
     return flags
 
@@ -718,6 +751,31 @@ def _get_major_holder_change_count(supabase, ticker: str) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Equity-ratio adjustment helper
+# ---------------------------------------------------------------------------
+
+def _adjust_by_equity_ratio(keywords: dict, amount_key: str = "raise_amount") -> int:
+    """금액/자기자본 비율로 점수 보정값 반환.
+    - 자기자본 50%↑: 대규모 → +15
+    - 자기자본 20%↑: 중규모 → +8
+    - 자기자본 2%↓: 소규모 → -10
+    amount_key: 사용할 금액 키워드 (raise_amount / buyback_amount)
+    """
+    amount = keywords.get(amount_key, 0)
+    equity = keywords.get("equity_amount", 0)
+    if not amount or not equity or equity <= 0:
+        return 0
+    ratio = amount / equity
+    if ratio >= 0.50:
+        return 15
+    elif ratio >= 0.20:
+        return 8
+    elif ratio <= 0.02:
+        return -10
+    return 0
+
+
+# ---------------------------------------------------------------------------
 # Per-category scoring functions
 # ---------------------------------------------------------------------------
 
@@ -771,13 +829,19 @@ def _score_capital_raising(keywords: dict, ticker: str = None, supabase=None) ->
     cb_purpose = keywords.get("cb_purpose", "")
     if cb_purpose:
         if cb_purpose in ("시설자금", "타법인증권취득"):
-            return (50, "CAPITAL_RAISING_CB_FACILITY", "", "")
+            base = 50
+            adjust = _adjust_by_equity_ratio(keywords)
+            return (min(base + adjust, 100), "CAPITAL_RAISING_CB_FACILITY", "", "")
         else:
-            return (15, "CAPITAL_RAISING_CB_WORKING", "", "")
+            base = 15
+            adjust = _adjust_by_equity_ratio(keywords)
+            return (min(base + adjust, 100), "CAPITAL_RAISING_CB_WORKING", "", "")
 
     # 일반 사채발행 (기타파생결합사채, 회사채)
     if keywords.get("debt_issuance", False):
-        return (45, "CAPITAL_RAISING_DEBT_ISSUANCE", "", "")
+        base = 45
+        adjust = _adjust_by_equity_ratio(keywords)
+        return (min(base + adjust, 100), "CAPITAL_RAISING_DEBT_ISSUANCE", "", "")
 
     # 감자
     reduction_type = keywords.get("capital_reduction_type", "")
@@ -793,7 +857,9 @@ def _score_capital_raising(keywords: dict, ticker: str = None, supabase=None) ->
         base_score = max(0, base_score - 20)
         return (base_score, "CAPITAL_RAISING_DELAYED_PAYMENT", "", "")
 
-    return (30, "CAPITAL_RAISING_GENERAL", "", "")
+    base = 30
+    adjust = _adjust_by_equity_ratio(keywords)
+    return (min(base + adjust, 100), "CAPITAL_RAISING_GENERAL", "", "")
 
 
 def _score_biotech(keywords: dict) -> tuple:
@@ -1003,7 +1069,9 @@ def _score_shareholder_return(keywords: dict, ticker: str = None, supabase=None)
 
     # 자사주 취득(소각 미언급)
     if buyback_only:
-        return (54, "SHAREHOLDER_BUYBACK_ONLY", "", "자사주취득")
+        base = 54
+        adjust = _adjust_by_equity_ratio(keywords, amount_key="buyback_amount")
+        return (min(base + adjust, 100), "SHAREHOLDER_BUYBACK_ONLY", "", "자사주취득")
 
     # 자사주 처분
     if treasury_disposal:
