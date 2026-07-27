@@ -27,8 +27,8 @@ const examples: ExampleCardProps[] = [
     time: "07. 27. 오후 04:50",
     title: "주식소각결정",
     score: 90,
-    signal: { icon: "🟢", label: "단기 긍정 신호", color: "text-green-400" },
-    summary: "NAVER는 보통주 4,901,094주(전체의 3.1%)를 8월 3일 자사주 소각하기로 이사회 결의했다. 배당가능이익 범위 내 진행으로 자본금 감소는 없으며, 주당 가치에 긍정적인 영향을 미칠 수 있다.",
+    signal: { icon: "🟢", label: "주주환원", color: "text-green-400" },
+    summary: "NAVER는 보통주 4,901,094주(전체의 3.1%)를 8월 3일 자사주 소각하기로 이사회 결의했다. 배당가능이익 범위 내 진행으로 자본금 감소는 없으며, 자기주식 소각은 주주가치 제고를 위한 결정이다.",
     badge: "주주환원",
   },
   {
@@ -37,8 +37,8 @@ const examples: ExampleCardProps[] = [
     time: "07. 27. 오후 06:27",
     title: "CKD-339 식약처 3상 임상시험 계획 승인",
     score: 95,
-    signal: { icon: "🟢", label: "장기 긍정 신호", color: "text-green-400" },
-    summary: "종근당은 고혈압 치료제 CKD-339에 대해 식약처가 제3상 임상시험 계획을 승인했다. 300명 대상 36개월 임상 돌입. 신약 개발 본궤도 진입으로 장기 사업 성장에 기여할 구조적 이벤트.",
+    signal: { icon: "🟢", label: "임상 이벤트", color: "text-green-400" },
+    summary: "종근당은 고혈압 치료제 CKD-339에 대해 식약처가 제3상 임상시험 계획을 승인했다. 300명 대상 36개월 임상 돌입. 신약 개발이 본궤도에 진입했으며, 향후 임상 결과에 따라 사업 성과가 결정될 구조적 이벤트다.",
     badge: "바이오",
   },
   {
@@ -47,8 +47,8 @@ const examples: ExampleCardProps[] = [
     time: "07. 27. 오후 06:23",
     title: "관리종목지정우려 (시가총액 200억원 미달)",
     score: 8,
-    signal: { icon: "🔴", label: "단기 부정 신호", color: "text-red-400" },
-    summary: "시가총액 200억원 미달로 관리종목 지정 우려. 상장 유지에 위험이 따르는 신호.",
+    signal: { icon: "🔴", label: "상장유지 리스크", color: "text-red-400" },
+    summary: "시가총액 200억원 미달로 관리종목 지정 우려. 상장 유지에 위험이 따르는 리스크 요인.",
     badge: "상장위험",
   },
 ];
@@ -69,7 +69,7 @@ const problems = [
   {
     icon: Clock,
     title: "시간과의 싸움",
-    desc: "전문 분석가도 공시 하나당 평균 10분 이상 소요됩니다. 그 사이 중요한 신호를 놓칩니다.",
+    desc: "전문 분석가도 공시 하나당 평균 10분 이상 소요됩니다. 그 사이 중요한 공시를 놓칩니다.",
   },
 ];
 
@@ -92,8 +92,8 @@ const features = [
   },
   {
     icon: Target,
-    title: "DVI 중요도 점수",
-    desc: "0~100점으로 공시의 중요도와 정보량을 정량화. 점수가 높을수록 내용이 풍부하거나 이례적인 공시입니다.",
+    title: "정보량 지수 (DVI)",
+    desc: "0~100점으로 공시의 정보량과 이례성을 정량화. 점수가 높을수록 내용이 풍부하거나 시장에 새로운 정보를 제공하는 공시입니다.",
     color: "text-green-400",
     bg: "bg-green-900/10",
     border: "border-green-900/30",
@@ -126,7 +126,7 @@ const features = [
 
 const steps = [
   { num: "01", title: "공시 수집", desc: "OpenDART에서 새로운 공시를 30초 간격으로 24시간 자동 수집합니다.", icon: FileText },
-  { num: "02", title: "AI 분석",     desc: "카테고리 분류 → 키워드 분석 → DVI 점수 산출 → 위험 탐지까지 1초 미만.", icon: Brain },
+  { num: "02", title: "AI 분석",     desc: "카테고리 분류 → 키워드 추출 → 정보량 점수 산출 → 위험 탐지까지 1초 미만.", icon: Brain },
   { num: "03", title: "실시간 전달", desc: "점수와 함께 실시간 피드에 즉시 노출. 시세에 영향 주는 핵심 공시만 선별하여 보여줍니다.", icon: Filter },
 ];
 
@@ -163,7 +163,7 @@ function ExampleCard({ item }: { item: ExampleCardProps }) {
         </div>
         {/* DVI */}
         <div className="shrink-0 w-14 text-center">
-          <div className="text-[9px] font-mono font-bold text-[var(--text-muted)]">DVI</div>
+          <div className="text-[8px] font-mono font-bold text-[var(--text-muted)] leading-tight">정보량<br />지수</div>
           <div className={`text-lg font-bold font-mono leading-none ${scoreTextColor}`}>{item.score}</div>
           <div className="w-full h-1 rounded-full bg-gray-800 mt-0.5 overflow-hidden">
             <div className={`h-full rounded-full ${barColor}`} style={{ width: `${item.score}%` }} />
@@ -171,7 +171,7 @@ function ExampleCard({ item }: { item: ExampleCardProps }) {
         </div>
       </div>
       {/* Signal */}
-      <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-opacity-20 ${item.signal.color} bg-green-900/10`}>
+      <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-opacity-20 ${item.signal.color}`}>
         <span>{item.signal.icon}</span>
         <span className={item.signal.color}>{item.signal.label}</span>
       </div>
@@ -210,7 +210,7 @@ export default function IntroPage() {
           <p className="text-lg text-[var(--text-secondary)] mt-6 max-w-xl leading-relaxed">
             DartPR은 모든 OpenDART 공시를 실시간 수집하고 AI로 분석합니다.
             시세에 영향을 주는 핵심 공시만 선별하여 보여주며,
-            카테고리 분류, 중요도 점수, 위험 탐지로 단 한 건의 중요한 신호도 놓치지 않게 도와줍니다.
+            카테고리 분류, 정보량 점수, 위험 탐지로 단 한 건의 중요한 이벤트도 놓치지 않게 도와줍니다.
           </p>
 
           <div className="flex items-center gap-4 mt-8">
