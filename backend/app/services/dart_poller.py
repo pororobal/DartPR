@@ -142,7 +142,8 @@ OPENDART_DOCUMENT_URL = "https://opendart.fss.or.kr/api/document.xml"
 
 
 async def _fetch_disclosure_list() -> list[dict]:
-    today = datetime.now().astimezone()
+    kst = timezone(timedelta(hours=9))
+    today = datetime.now(kst)
     date_str = today.strftime("%Y%m%d")
 
     all_items: list[dict] = []
@@ -532,17 +533,19 @@ async def _enrich_with_cerebras(
 # ---------------------------------------------------------------------------
 
 async def poll_dart_once():
-    now = datetime.now().astimezone()
-    hour = now.hour
+    # Use KST for all time-sensitive checks (DART operates on Korean time)
+    kst = timezone(timedelta(hours=9))
+    now_kst = datetime.now(kst)
+    hour_kst = now_kst.hour
 
     # Skip weekends (DART 제출 불가)
-    if now.weekday() >= 5:
+    if now_kst.weekday() >= 5:
         logger.debug("Skipping poll on weekend (DART closed)")
         return
 
-    # Skip polling during DART submission downtime (19:00 ~ 07:30)
-    if hour >= 19 or hour < 7:
-        logger.debug("Skipping poll during DART downtime (19:00-07:30)")
+    # Skip polling during DART submission downtime (19:00 ~ 07:30 KST)
+    if hour_kst >= 19 or hour_kst < 7:
+        logger.debug("Skipping poll during DART downtime (19:00-07:30 KST)")
         return
 
     logger.info("Polling DART API...")
