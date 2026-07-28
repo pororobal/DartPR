@@ -1402,24 +1402,27 @@ def evaluate_disclosure(
             signal_horizon="",
         )
 
-    hard_fail = check_hard_fail(raw_text)
-    if hard_fail.detected:
-        return ScoreResult(
-            category="DELISTING_RISK",
-            sub_rule_id=f"HARD_FAIL_{hard_fail.matched_keyword}",
-            dvi_score=0,
-            impact_level="HIGH_IMPACT",
-            risk_flag="HIGH_RISK_TRAP",
-            is_feed_visible=True,
-            skip_llm=True,
-            deceptive_pattern_detected=True,
-            momentum_authenticity="LOW",
-            signal_horizon="SHORT_TERM",
-        )
-
-    # Step 3: Category guess + keyword extraction
+    # Step 2: Keyword extraction (needed for hard-fail guard 및 카테고리 추정)
     combined = f"{title} {raw_text[:3000]}"
     keywords = _extract_keywords(combined)
+
+    # Hard-fail check — 단, 최대주주변경은 _score_shareholder_ma에서 정상 채점
+    #   (최대주주변경 raw_text에 hard_fail 키워드가 맥락상 포함될 수 있음)
+    if not keywords.get("major_holder_change"):
+        hard_fail = check_hard_fail(raw_text)
+        if hard_fail.detected:
+            return ScoreResult(
+                category="DELISTING_RISK",
+                sub_rule_id=f"HARD_FAIL_{hard_fail.matched_keyword}",
+                dvi_score=0,
+                impact_level="HIGH_IMPACT",
+                risk_flag="HIGH_RISK_TRAP",
+                is_feed_visible=True,
+                skip_llm=True,
+                deceptive_pattern_detected=True,
+                momentum_authenticity="LOW",
+                signal_horizon="SHORT_TERM",
+            )
 
     # Risk-specific early scoring (before standard category routing)
     if keywords.get("going_concern"):

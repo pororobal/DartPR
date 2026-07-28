@@ -313,8 +313,9 @@ export default function DisclosureCard({ item, isAdmin = false }: DisclosureCard
     setAnalyzing(true);
     setAnalyzeError(null);
     try {
-      await disclosures.analyze(item.id);
-      window.location.reload();
+      const result = await disclosures.analyze(item.id);
+      // Optimistic update — backend just re-ran the LLM analysis
+      setAnalyzeError(null);
     } catch (e) {
       console.error("LLM analysis failed:", e);
       setAnalyzeError("LLM 분석에 실패했습니다");

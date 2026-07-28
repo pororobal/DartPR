@@ -24,14 +24,9 @@ class Settings(BaseSettings):
     groq_ambiguity_model: str = "llama-3.1-8b-instant"
     groq_base_url: str = "https://api.groq.com/openai/v1"
 
-    # Cerebras LLM (legacy — replaced by Groq, kept for backward compat)
-    cerebras_api_key: str = ""
-    cerebras_model: str = "gpt-oss-120b"
-    cerebras_base_url: str = "https://api.cerebras.ai/v1"
-
-    # Ambiguous disclosure threshold: scores below this get Cerebras analysis
+    # Ambiguous disclosure threshold: scores below this get ambiguity LLM analysis
     # when keyword matching is insufficient (category=OTHER or ambiguous titles)
-    cerebras_analysis_threshold: int = 40
+    ambiguity_analysis_threshold: int = 40
 
     # Supabase
     supabase_url: str = ""

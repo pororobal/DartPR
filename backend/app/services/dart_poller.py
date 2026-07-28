@@ -8,7 +8,7 @@ Background scheduler pipeline:
 4. Step 2: Fast-fail check → risk_flag=HIGH_RISK_TRAP, always visible, skip LLM
 5. Step 3: Keyword category guess
 6. Step 4: Full scoring (all §5 tables, DB history lookups)
-7. Step 5: LLM enrichment ONLY if score >= FEED_VISIBILITY_THRESHOLD (80)
+7. Step 5: LLM enrichment if _needs_llm() returns True (score >= 60)
 8. INSERT → Realtime broadcast
 """
 
@@ -82,6 +82,15 @@ def _strip_markup(text: str) -> str:
 
 _scheduler: Optional[AsyncIOScheduler] = None
 _is_running = False
+_background_tasks: set[asyncio.Task] = set()
+
+
+def _bg_task(coro) -> asyncio.Task:
+    """Safely fire a background task — tracked in _background_tasks to prevent GC loss."""
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(lambda t: _background_tasks.discard(t))
+    return task
 
 
 async def start_poller():
@@ -130,6 +139,10 @@ async def stop_poller():
     if _scheduler and _is_running:
         _scheduler.shutdown(wait=False)
         _is_running = False
+        # Cancel any in-flight background tasks
+        for task in list(_background_tasks):
+            task.cancel()
+        _background_tasks.clear()
         logger.info("DART poller stopped")
 
 
@@ -253,7 +266,17 @@ async def _process_disclosure(item: dict, skip_document: bool = False):
     corp_name = _clean_text(item.get("corp_name", ""))
     title = _clean_text(item.get("report_nm", "")).strip()
 
-    published_at = datetime.now(timezone.utc)
+    # Use DART API receipt date (rcept_dt) — NOT poll time.
+    # DART only provides date (YYYYMMDD), so time defaults to 00:00 KST.
+    rcept_dt_str = item.get("rcept_dt", "")
+    if rcept_dt_str and len(rcept_dt_str) == 8:
+        try:
+            d = datetime.strptime(rcept_dt_str, "%Y%m%d")
+            published_at = d.replace(tzinfo=kst).astimezone(timezone.utc)
+        except ValueError:
+            published_at = datetime.now(timezone.utc)
+    else:
+        published_at = datetime.now(timezone.utc)
 
     if not rcept_no:
         logger.warning("Disclosure item missing rcept_no -- skipping")
@@ -338,13 +361,13 @@ async def _process_disclosure(item: dict, skip_document: bool = False):
 
     if not score_result.skip_llm:
         brief = score_result.dvi_score < 80
-        asyncio.create_task(
+        _bg_task(
             _enrich_with_llm(rcept_no, ticker, corp_name, title, raw_text, brief=brief)
         )
 
     if score_result.needs_cerebras:
-        asyncio.create_task(
-            _enrich_with_cerebras(rcept_no, ticker, corp_name, title, raw_text)
+        _bg_task(
+            _enrich_ambiguity(rcept_no, ticker, corp_name, title, raw_text)
         )
 
 
@@ -482,7 +505,7 @@ async def _enrich_with_llm(
             pass
 
 
-async def _enrich_with_cerebras(
+async def _enrich_ambiguity(
     rcept_no: str,
     ticker: str,
     corp_name: str,
@@ -518,13 +541,13 @@ async def _enrich_with_cerebras(
         ).execute()
 
         logger.info(
-            f"Cerebras enrichment done for {rcept_no}: "
+            f"Ambiguity enrichment done for {rcept_no}: "
             f"direction={result.impact_direction} horizon={result.horizon}"
         )
 
     except Exception as e:
         logger.error(
-            f"Cerebras enrichment failed for {rcept_no}: {e}", exc_info=True
+            f"Ambiguity enrichment failed for {rcept_no}: {e}", exc_info=True
         )
 
 

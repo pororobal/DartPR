@@ -402,7 +402,7 @@ async def trigger_llm_analysis(
 ):
     """
     Manually trigger LLM analysis for a specific disclosure.
-    Uses Cerebras for analysis.
+    Uses Groq LLM for summarization + ambiguity analysis.
     """
     if not user or user.get("plan") != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
@@ -467,7 +467,7 @@ async def trigger_llm_analysis(
             if cerebras_result.horizon in ("SHORT_TERM", "LONG_TERM"):
                 update_data["signal_horizon"] = cerebras_result.horizon
         except Exception as e:
-            logger.warning(f"Cerebras ambiguity analysis failed for {disclosure_id}: {e}")
+            logger.warning(f"Ambiguity analysis failed for {disclosure_id}: {e}")
 
     supabase.table("disclosures").update(update_data).eq(
         "id", disclosure_id
