@@ -1535,7 +1535,7 @@ def evaluate_disclosure(
 
     # Step 5: Determine visibility + LLM (layered by score + context)
     is_feed_visible = score >= 60
-    skip_llm = not _needs_llm(score, category, sub_rule_id, title, keywords)
+    skip_llm = not _needs_llm(score, category, sub_id, title, keywords)
     # LLM: 80+ full summary, 60-79 short summary, 30-59 selective (handled by caller)
 
     horizon = _assign_signal_horizon(sub_id, category)
