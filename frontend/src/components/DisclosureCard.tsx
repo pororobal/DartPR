@@ -302,14 +302,12 @@ export default function DisclosureCard({ item, isAdmin = false }: DisclosureCard
   const signal = getSignal(item);
   const cleanTitle = item.title?.replace(/\s+/g, " ").trim() || "";
   const pubDate = new Date(item.published_at);
-  // DART API only provides date (rcept_dt), not time. When time is midnight KST
-  // (15:00 UTC previous day), show date only to avoid misleading "오전 12:00".
-  const _isMidnightKst = (d: Date) => d.getUTCHours() === 15 && d.getUTCMinutes() === 0;
-  const formattedTime = _isMidnightKst(pubDate)
-    ? pubDate.toLocaleDateString("ko-KR", { month: "2-digit", day: "2-digit" })
-    : pubDate.toLocaleString("ko-KR", {
-        month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
-      });
+  // 항상 24시간제로 표시 (DART가 시간 미제공 시 00:00으로 표기)
+  const formattedTime = pubDate.toLocaleString("ko-KR", {
+    month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit",
+    hourCycle: "h23",
+  });
   const isPending = item.llm_status === "PENDING" && !item.llm_summary;
   const isTrap = item.risk_flag != null && item.risk_flag !== "CLEAN";
   const isAdministrative = item.category === "ADMINISTRATIVE";
