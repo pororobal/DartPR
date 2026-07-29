@@ -42,7 +42,7 @@ export default function SignupPage() {
         // Row may already exist — non-fatal
       }
 
-      router.push("/live");
+      router.push("/onboarding");
     } catch (e) {
       setError(e instanceof Error ? e.message : "회원가입 실패");
     } finally {
