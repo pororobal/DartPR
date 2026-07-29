@@ -106,6 +106,24 @@ _ADMIN_PATTERNS = [
 ]
 
 
+# SPV/shell entity substrings — 유동화전문(유한)회사 and similar ABS SPVs.
+# These are not real operating companies; their disclosures are routine securitization filings.
+_SPV_NAME_PATTERNS = [
+    "유동화전문",
+    "유동화전문회사",
+]
+
+
+def _is_spv_entity(corp_name: str) -> bool:
+    """Return True if the corporation name indicates an SPV/shell entity."""
+    if not corp_name:
+        return False
+    for pattern in _SPV_NAME_PATTERNS:
+        if pattern in corp_name:
+            return True
+    return False
+
+
 def check_administrative(title: str) -> bool:
     """Return True if this is an administrative disclosure (skips scoring & LLM)."""
     t = title.replace(" ", "")
@@ -1384,12 +1402,27 @@ def evaluate_disclosure(
     raw_text: str,
     ticker: str = "",
     supabase=None,
+    corp_name: str = "",
 ) -> ScoreResult:
     """
     Full scoring pipeline.
 
     Returns ScoreResult with category, score, risk_flag, etc.
     """
+    # Step 0: SPV/유동화전문회사 filter — these entities only file routine securitization
+    # disclosures that are noise for individual investors.
+    if _is_spv_entity(corp_name):
+        logger.debug(f"SPV entity detected: {corp_name} — marking ADMINISTRATIVE")
+        return ScoreResult(
+            category="ADMINISTRATIVE",
+            sub_rule_id="SPV_ENTITY",
+            dvi_score=10,
+            impact_level="LOW_IMPACT",
+            is_feed_visible=False,
+            skip_llm=True,
+            signal_horizon="",
+        )
+
     # Step 1: Administrative check
     if check_administrative(title):
         return ScoreResult(

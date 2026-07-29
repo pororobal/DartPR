@@ -30,6 +30,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from app.config import settings
 from app.services.supabase_client import get_supabase
 from app.services.rules_engine import (
+    _is_spv_entity,
     check_administrative,
     check_hard_fail,
     evaluate_disclosure,
@@ -283,8 +284,8 @@ async def _process_disclosure(item: dict, skip_document: bool = False):
         logger.warning("Disclosure item missing rcept_no -- skipping")
         return
 
-    # Skip document download for existing items or administrative disclosures
-    if skip_document or check_administrative(title):
+    # Skip document download for existing items, administrative disclosures, or SPV entities
+    if skip_document or check_administrative(title) or _is_spv_entity(corp_name):
         raw_text = f"{corp_name} - {title}"
     else:
         raw_text = await _fetch_document_text(rcept_no)
@@ -299,6 +300,7 @@ async def _process_disclosure(item: dict, skip_document: bool = False):
         raw_text=raw_text,
         ticker=ticker,
         supabase=supabase,
+        corp_name=corp_name,
     )
 
     logger.info(
