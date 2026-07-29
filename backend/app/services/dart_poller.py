@@ -226,6 +226,12 @@ async def _fetch_document_text(rcept_no: str) -> Optional[str]:
             resp.raise_for_status()
             content = resp.content
 
+            # DART API returns error XML (e.g. "014: 파일이 존재하지 않습니다") as 200 OK.
+            # Detect and discard so Groq doesn't summarize a DART error message.
+            if content.strip().startswith(b"<") and b"<result>" in content and b"<status>" in content:
+                logger.warning(f"DART API returned error XML for {rcept_no}: {content[:200].decode('utf-8', errors='replace')}")
+                return None
+
             if zipfile.is_zipfile(BytesIO(content)):
                 chunks: list[str] = []
                 with zipfile.ZipFile(BytesIO(content)) as archive:
