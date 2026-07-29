@@ -560,6 +560,53 @@ async def _enrich_ambiguity(
             "dart_rcept_no", rcept_no
         ).execute()
 
+        # ── LLM feedback loop: sentiment를 DVI 점수에 반영 ──────────
+        # 기존 점수(30~59점. 모호한 공시에 대한 규칙 기반 점수)를
+        # LLM이 분석한 방향성/확신도로 조정. HIGH/MEDIUM confidence만 반영.
+        if result.confidence in ("HIGH", "MEDIUM"):
+            try:
+                current = (
+                    supabase.table("disclosures")
+                    .select("dvi_score, is_feed_visible")
+                    .eq("dart_rcept_no", rcept_no)
+                    .maybe_single()
+                    .execute()
+                )
+                if current and current.data:
+                    old_score = current.data.get("dvi_score") or 30
+                    new_score = old_score
+
+                    if result.impact_direction == "BENEFICIAL":
+                        if result.confidence == "HIGH":
+                            new_score = max(old_score + 20, 55)  # 최소 55로 상향
+                            new_score = min(new_score, 85)
+                        else:  # MEDIUM
+                            new_score = min(old_score + 12, 75)
+                    elif result.impact_direction == "ADVERSE":
+                        if result.confidence == "HIGH":
+                            new_score = max(old_score - 15, 0)
+                        else:  # MEDIUM
+                            new_score = max(old_score - 8, 0)
+                    # NEUTRAL → 점수 변동 없음
+
+                    if new_score != old_score:
+                        new_feed_visible = new_score >= 55  # 55↑면 feed 노출
+                        (supabase.table("disclosures").update({
+                            "dvi_score": new_score,
+                            "is_feed_visible": new_feed_visible,
+                        }).eq("dart_rcept_no", rcept_no).execute())
+
+                        logger.info(
+                            f"LLM feedback applied for {rcept_no}: "
+                            f"score {old_score}→{new_score}, "
+                            f"feed_visible={new_feed_visible} "
+                            f"(sentiment={sentiment}, confidence={result.confidence})"
+                        )
+            except Exception as fb_e:
+                logger.warning(
+                    f"LLM score feedback skipped for {rcept_no}: {fb_e}"
+                )
+
         logger.info(
             f"Ambiguity enrichment done for {rcept_no}: "
             f"direction={result.impact_direction} horizon={result.horizon}"

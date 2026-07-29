@@ -526,7 +526,7 @@ def _extract_keywords(text: str) -> dict:
     )
 
     # ETC flags
-    flags["patent_acquisition"] = bool(re.search(r"특허권\s*취득|특허\s*취득", text))
+    flags["patent_acquisition"] = bool(re.search(r"특허권\s*취득|특허\s*취득|특허\s*등록", text))
     flags["new_business_entry"] = bool(
         re.search(r"(신규사업\s*진출|사업\s*다각화|신사업)", text)
     )
@@ -535,6 +535,15 @@ def _extract_keywords(text: str) -> dict:
         re.search(r"(시설투자|신규시설|생산시설.*증설)", text)
     )
     flags["serious_accident"] = bool(re.search(r"중대재해", text))
+    flags["order_receipt"] = bool(
+        re.search(r"(수주|수주공시|공급계약|납품계약)", text)
+    )
+    flags["asset_acquisition"] = bool(
+        re.search(r"(자산양수도|사업양수도|자산.*취득|사업.*인수)", text)
+    )
+    flags["contract_renewal"] = bool(
+        re.search(r"(계약갱신|재계약|공급계약.*갱신)", text)
+    )
 
     # 자기자본 — 회사 규모 proxy (원 단위로 정규화)
     m = re.search(r"자기자본.*?(\d[\d,]*)\s*(억|원)", text)
@@ -691,6 +700,18 @@ def guess_category(title: str, raw_text: str, keywords: dict = None) -> tuple[st
     # 첨부정정/정정조건부 → ADMINISTRATIVE
     if any(kw in t for kw in ["첨부정정", "정정조건부"]):
         return ("ADMINISTRATIVE", keywords)
+
+    # 수주/공급계약/납품계약 → BUSINESS_CONTRACT
+    if keywords.get("order_receipt") and not keywords.get("moU_detected"):
+        return ("BUSINESS_CONTRACT", keywords)
+
+    # 자산양수도 → SHAREHOLDER_RETURN (M&A scoring)
+    if keywords.get("asset_acquisition"):
+        return ("SHAREHOLDER_RETURN", keywords)
+
+    # 계약갱신 → BUSINESS_CONTRACT
+    if keywords.get("contract_renewal"):
+        return ("BUSINESS_CONTRACT", keywords)
 
     return ("OTHER", keywords)
 
@@ -966,6 +987,12 @@ def _score_business_contract(keywords: dict, ticker: str = None, supabase=None) 
         base_score = min(int(base_score * 0.7), 70)
     if keywords.get("development_agreement", False):
         base_score = min(base_score + 5, 100)
+    # 수주/공급계약 — 중소형주 핵심 모멘텀, 기본 65+
+    if keywords.get("order_receipt", False):
+        base_score = max(base_score, 65)
+    # 계약갱신 — 기존 관계 확인 = 리스크 ↓
+    if keywords.get("contract_renewal", False):
+        base_score = max(base_score, 60)
 
     sub_id = f"BUSINESS_CONTRACT_{int(ratio) if ratio else 'NA'}_PCT"
     return (min(base_score, 100), sub_id, "", "")
@@ -1400,6 +1427,17 @@ def _needs_llm(score: int, category: str, sub_rule_id: str, title: str, keywords
     return True
 
 
+# Sub-rule IDs that represent unclassified/generic fallbacks.
+# These are true noise: the rule engine couldn't find a specific match.
+# Items with these sub-rule IDs stay hidden at score < 60.
+_NOISE_SUB_IDS = {
+    "OTHER_DEFAULT", "ADMIN_DISCLOSURE", "SPV_ENTITY",
+    "MA_GENERAL", "SHAREHOLDER_GENERAL", "EARNINGS_GENERAL",
+    "BIOTECH_GENERAL", "CAPITAL_RAISING_GENERAL",
+    "BUSINESS_CONTRACT_NA_PCT",
+}
+
+
 # ---------------------------------------------------------------------------
 # Main evaluation pipeline
 # ---------------------------------------------------------------------------
@@ -1589,6 +1627,10 @@ def evaluate_disclosure(
 
     # Step 5: Determine visibility + LLM (layered by score + context)
     is_feed_visible = score >= 60
+    # 30~59점 구간: 특정 이벤트(감사인변경·대표이사변경 등)는
+    #   unclassified fallback(NOISE)이 아닌 한 feed에 표시
+    if not is_feed_visible and score >= 30 and sub_id not in _NOISE_SUB_IDS:
+        is_feed_visible = True
     skip_llm = not _needs_llm(score, category, sub_id, title, keywords)
     # LLM: 80+ full summary, 60-79 short summary, 30-59 selective (handled by caller)
 

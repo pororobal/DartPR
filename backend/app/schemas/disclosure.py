@@ -43,6 +43,8 @@ class DisclosureResponse(BaseModel):
     merged_horizon: Optional[str] = None
     merged_confidence: Optional[str] = None
     related_disclosures: Optional[List[dict]] = None
+    # DVI 점수 근거 (서버에서 동적 생성)
+    score_factors: List[str] = []
 
 
 class DisclosureListResponse(BaseModel):

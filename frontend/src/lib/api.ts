@@ -119,6 +119,7 @@ export interface DisclosureItem {
   merged_horizon?: string | null;
   merged_confidence?: string | null;
   related_disclosures?: Array<{ date: string; title: string; rcept_no: string }> | null;
+  score_factors?: string[];
 }
 
 export interface DisclosureList {

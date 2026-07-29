@@ -399,6 +399,18 @@ export default function DisclosureCard({ item, isAdmin = false }: DisclosureCard
         ) : null;
       })()}
 
+      {/* ── Row 2c: Score Factors ────────────────────────── */}
+      {item.score_factors && item.score_factors.length > 0 && (
+        <div className="mt-2 text-[11px] text-[var(--text-muted)] space-y-0.5">
+          {item.score_factors.map((f, i) => (
+            <div key={i} className="flex items-start gap-1.5">
+              <span className="text-[var(--accent-mint)] shrink-0">·</span>
+              <span>{f}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* ── Row 3: AI Summary ────────────────────────────── */}
       <div className="mt-3">
         {isAdministrative ? (
