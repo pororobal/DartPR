@@ -26,12 +26,14 @@ services:
         sync: false
       - key: JWT_SECRET
         sync: false
+      - key: ADMIN_API_KEY
+        sync: false
       - key: APP_NAME
         value: DART0s
       - key: DEBUG
         value: "false"
       - key: CORS_ORIGINS
-        value: "*"
+        value: "https://dartpr.vercel.app,https://www.dartpr.vercel.app"
       - key: POLL_INTERVAL_SECONDS
         value: "30"
       - key: FREE_TIER_DELAY_SECONDS

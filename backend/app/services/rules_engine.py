@@ -1142,16 +1142,17 @@ def _score_shareholder_return(keywords: dict, ticker: str = None, supabase=None)
             return (45, "SHAREHOLDER_DISPOSAL_STOCK_OPTION", "", "자사주처분")
         return (10, "SHAREHOLDER_DISPOSAL_OPERATING", "", "자사주처분")
 
-    # 배당
+    # 배당 — 재료성 없음: 과거 실적의 절차적 분배, 시세 변동 유발 안 함
+    #   전반적으로 30 미만 점수 = feed 노출 제외 + LLM 분석 생략
     if dividend:
         # 주식배당 = 현금 없어서 주식으로 = 악재
         if keywords.get("stock_dividend", False):
-            return (25, "SHAREHOLDER_STOCK_DIVIDEND", "", "주식배당")
+            return (18, "SHAREHOLDER_STOCK_DIVIDEND", "", "주식배당")
         if is_first_dividend:
-            return (65, "SHAREHOLDER_FIRST_DIVIDEND", "", "최초배당")
+            return (25, "SHAREHOLDER_FIRST_DIVIDEND", "", "최초배당")
         if dividend_rate >= 5:
-            return (65, "SHAREHOLDER_DIVIDEND_HIGH", "", "배당")
-        return (48, "SHAREHOLDER_DIVIDEND_LOW", "", "배당")
+            return (28, "SHAREHOLDER_DIVIDEND_HIGH", "", "배당")
+        return (20, "SHAREHOLDER_DIVIDEND_LOW", "", "배당")
 
     return (30, "SHAREHOLDER_GENERAL", "", "")
 

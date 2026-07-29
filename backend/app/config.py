@@ -15,8 +15,8 @@ class Settings(BaseSettings):
     opendart_api_key: str = ""
     dart_api_base_url: str = "https://opendart.fss.or.kr/api"
 
-    # Admin
-    admin_api_key: str = "dart0s-admin-2024"
+    # Admin API key (set via env var ADMIN_API_KEY; no default for security)
+    admin_api_key: str = ""
 
     # Groq LLM (primary — free tier, OpenAI-compatible)
     groq_api_key: str = ""
@@ -34,7 +34,8 @@ class Settings(BaseSettings):
     supabase_anon_key: str = ""
 
     # JWT (supplemental; Supabase Auth is primary)
-    jwt_secret: str = "change-me-in-production"
+    # Must be set via JWT_SECRET env var in production
+    jwt_secret: str = ""
     jwt_algorithm: str = "HS256"
 
     # Polling
