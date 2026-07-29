@@ -147,10 +147,14 @@ export default function LivePage() {
     };
   }, []);
 
+  // 지연 계산 기준 시점 (새로고침 시 갱신)
+  const loadTimeRef = useRef(Date.now());
+  const [lastUpdated, setLastUpdated] = useState("");
+
   // Determine real-time vs delayed display
   const baseItems = useMemo(() => {
     if (isPremium) return items;
-    const cutoff = Date.now() - 3 * 60 * 1000;
+    const cutoff = loadTimeRef.current - 3 * 60 * 1000;
     return items.filter((it) => {
       return new Date(it.published_at).getTime() <= cutoff;
     });
@@ -161,6 +165,8 @@ export default function LivePage() {
     if (filter === "all") return baseItems;
     return baseItems.filter((it) => getNature(it) === filter);
   }, [baseItems, filter]);
+
+  const delayedCount = isPremium ? 0 : Math.max(0, items.length - baseItems.length);
 
   if (loading) {
     return (
@@ -210,8 +216,11 @@ export default function LivePage() {
         <button
           onClick={() => {
             if (refreshing) return;
+            loadTimeRef.current = Date.now();
             setRefreshing(true);
-            loadData().finally(() => setRefreshing(false));
+            loadData()
+              .then(() => setLastUpdated(new Date().toLocaleTimeString("ko-KR")))
+              .finally(() => setRefreshing(false));
           }}
           disabled={refreshing}
           className="btn-outline text-sm py-2 px-4 flex items-center gap-1.5 disabled:opacity-50"
@@ -220,6 +229,12 @@ export default function LivePage() {
           {refreshing ? "새로고침 중..." : "새로고침"}
         </button>
       </div>
+      {lastUpdated && (
+        <p className="text-[11px] text-[var(--text-muted)] -mt-3 mb-3">
+          마지막 업데이트: {lastUpdated}
+          {delayedCount > 0 && ` · ${delayedCount}개 항목 3분 후 표시`}
+        </p>
+      )}
 
       {/* Filter tabs */}
       <div className="flex items-center gap-2 mb-4">

@@ -9,7 +9,7 @@ Two analysis paths:
 import asyncio
 import json
 import logging
-from typing import List
+from typing import Any, List
 
 from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
@@ -18,6 +18,39 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 _llm_semaphore = asyncio.Semaphore(2)
+
+
+_RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
+_MAX_RETRIES = 3
+
+
+async def _call_with_retry(client, kwargs: dict) -> Any:
+    """Call client.chat.completions.create with exponential backoff on retryable errors."""
+    last_exc = None
+    for attempt in range(_MAX_RETRIES):
+        try:
+            return await client.chat.completions.create(**kwargs)
+        except Exception as e:
+            last_exc = e
+            status = None
+            if hasattr(e, "status_code"):
+                status = e.status_code
+            elif hasattr(e, "response") and hasattr(e.response, "status_code"):
+                status = e.response.status_code
+
+            if status in _RETRYABLE_STATUSES or status is None:
+                if attempt < _MAX_RETRIES - 1:
+                    wait = 2 ** attempt + (1 if attempt > 0 else 0)  # 1s, 5s, 9s
+                    logger.warning(
+                        f"Groq retry {attempt + 1}/{_MAX_RETRIES} after {wait}s "
+                        f"(status={status}, err={e})"
+                    )
+                    await asyncio.sleep(wait)
+                    continue
+            # Non-retryable or exhausted → surface immediately
+            raise
+    # All retries exhausted
+    raise last_exc  # type: ignore
 
 
 # ---------------------------------------------------------------------------
@@ -195,17 +228,19 @@ async def analyze_disclosure(
     max_tokens = 120 if brief else 800
 
     try:
+        kwargs = dict(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": _build_user_message(ticker, company_name, title, raw_text)},
+            ],
+            temperature=0.1,
+            max_tokens=max_tokens,
+            response_format={"type": "json_object"},
+        )
+
         async with _llm_semaphore:
-            response = await client.chat.completions.create(
-                model=model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": _build_user_message(ticker, company_name, title, raw_text)},
-                ],
-                temperature=0.1,
-                max_tokens=max_tokens,
-                response_format={"type": "json_object"},
-            )
+            response = await _call_with_retry(client, kwargs)
 
         content = response.choices[0].message.content
         if not content:
@@ -223,7 +258,7 @@ async def analyze_disclosure(
         logger.warning("openai package not installed")
         return _safe_summary_fallback("openai package not installed")
     except Exception as e:
-        logger.error(f"Groq analysis call failed: {e}", exc_info=True)
+        logger.error(f"Groq analysis call failed after retries: {e}", exc_info=True)
         return _safe_summary_fallback(f"Groq API error: {e}")
 
 
@@ -242,17 +277,19 @@ async def analyze_ambiguity(
     model = settings.groq_ambiguity_model
 
     try:
+        kwargs = dict(
+            model=model,
+            messages=[
+                {"role": "system", "content": AMBIGUITY_ANALYSIS_PROMPT},
+                {"role": "user", "content": _build_user_message(ticker, company_name, title, raw_text)},
+            ],
+            temperature=0.1,
+            max_tokens=300,
+            response_format={"type": "json_object"},
+        )
+
         async with _llm_semaphore:
-            response = await client.chat.completions.create(
-                model=model,
-                messages=[
-                    {"role": "system", "content": AMBIGUITY_ANALYSIS_PROMPT},
-                    {"role": "user", "content": _build_user_message(ticker, company_name, title, raw_text)},
-                ],
-                temperature=0.1,
-                max_tokens=300,
-                response_format={"type": "json_object"},
-            )
+            response = await _call_with_retry(client, kwargs)
 
         content = response.choices[0].message.content
         if not content:
@@ -272,5 +309,5 @@ async def analyze_ambiguity(
         logger.warning("openai package not installed")
         return _safe_ambiguity_fallback("openai package not installed")
     except Exception as e:
-        logger.error(f"Groq ambiguity call failed: {e}", exc_info=True)
+        logger.error(f"Groq ambiguity call failed after retries: {e}", exc_info=True)
         return _safe_ambiguity_fallback(f"Groq API error: {e}")

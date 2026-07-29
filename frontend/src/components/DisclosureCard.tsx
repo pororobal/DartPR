@@ -297,6 +297,7 @@ function MetricCard({ label, value, status }: { label: string; value: string; st
 export default function DisclosureCard({ item, isAdmin = false }: DisclosureCardProps) {
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
+  const [titleExpanded, setTitleExpanded] = useState(false);
   const cat = item.category ? categoryChip[item.category] : null;
   const signal = getSignal(item);
   const cleanTitle = item.title?.replace(/\s+/g, " ").trim() || "";
@@ -307,6 +308,7 @@ export default function DisclosureCard({ item, isAdmin = false }: DisclosureCard
   const isTrap = item.risk_flag != null && item.risk_flag !== "CLEAN";
   const isAdministrative = item.category === "ADMINISTRATIVE";
   const relatedStatus = item.related_status || "NONE";
+  const isFailed = !isPending && item.llm_summary?.includes("실패");
 
   const handleAnalyze = async () => {
     if (!item.id) return;
@@ -345,13 +347,29 @@ export default function DisclosureCard({ item, isAdmin = false }: DisclosureCard
               {formattedTime}
             </span>
           </div>
-          <h3 className="text-sm font-medium text-[var(--text-secondary)] mt-1 leading-snug line-clamp-2">
-            {cleanTitle}
-          </h3>
+          <button
+            onClick={() => setTitleExpanded(!titleExpanded)}
+            className="text-left w-full"
+          >
+            <h3 className={`text-sm font-medium text-[var(--text-secondary)] mt-1 leading-snug ${titleExpanded ? "" : "line-clamp-2"}`}>
+              {cleanTitle}
+            </h3>
+            {titleExpanded && (
+              <span className="text-[10px] text-[var(--accent-mint)] mt-0.5 inline-block">접기</span>
+            )}
+          </button>
+          {!titleExpanded && cleanTitle.length > 60 && (
+            <button
+              onClick={() => setTitleExpanded(true)}
+              className="text-[10px] text-[var(--accent-mint)] hover:text-white transition-colors mt-0.5"
+            >
+              더보기
+            </button>
+          )}
         </div>
 
         {/* Right: DVI Score */}
-        <div className="shrink-0 w-16 pt-1">
+        <div className="shrink-0 w-16 pt-1" title="정보량 지수 (0-100): 점수가 높을수록 공시가 시장에 새로운 정보를 제공합니다">
           <ScoreBadge score={item.dvi_score} />
         </div>
       </div>
@@ -385,6 +403,16 @@ export default function DisclosureCard({ item, isAdmin = false }: DisclosureCard
           <div className="space-y-1.5">
             <div className="shimmer h-3 w-full rounded" />
             <div className="shimmer h-3 w-3/4 rounded" />
+          </div>
+        ) : isFailed ? (
+          <div className="bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-lg p-3">
+            <div className="flex items-center gap-1.5 mb-1.5">
+              <span className="text-xs">📋</span>
+              <span className="text-[10px] font-bold text-[var(--text-muted)] tracking-wider uppercase">AI 핵심 요약</span>
+            </div>
+            <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
+              AI 요약을 준비 중입니다. 잠시 후 다시 확인해주세요.
+            </p>
           </div>
         ) : item.llm_summary ? (
           <div className="bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-lg p-3">
@@ -477,7 +505,7 @@ export default function DisclosureCard({ item, isAdmin = false }: DisclosureCard
             <ExternalLink size={11} />
             DART 원문 보기
           </a>
-          {isAdmin && !isAdministrative && !isTrap && (!item.llm_summary || item.llm_summary.includes("실패")) && (
+          {isAdmin && !isAdministrative && !isTrap && (isFailed || isPending) && (
             <button
               onClick={handleAnalyze}
               disabled={analyzing}

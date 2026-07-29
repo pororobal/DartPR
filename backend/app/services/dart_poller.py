@@ -389,7 +389,7 @@ async def _enrich_with_llm(
 
         supabase = get_supabase()
 
-        # Step 1: 기본 분석 (현행)
+        # Step 1: 기본 분석 (Groq — 내부에서 rate-limit 재시도 처리)
         llm_result = await groq_analyze(
             ticker=ticker,
             company_name=corp_name,
@@ -397,6 +397,14 @@ async def _enrich_with_llm(
             raw_text=raw_text,
             brief=brief,
         )
+
+        # Groq retry 소진 후에도 실패한 경우 → DB 갱신 없이 PENDING 유지
+        if not llm_result.llm_summary or "실패" in llm_result.llm_summary:
+            logger.warning(
+                f"LLM enrichment failed for {rcept_no} after retries — "
+                f"keeping PENDING for later re-attempt"
+            )
+            return
 
         update_data = _clean_payload({
             "llm_summary": _clean_text(llm_result.llm_summary, limit=8000),
@@ -495,14 +503,6 @@ async def _enrich_with_llm(
         logger.error(
             f"LLM enrichment failed for {rcept_no}: {e}", exc_info=True
         )
-        try:
-            supabase = get_supabase()
-            supabase.table("disclosures").update({
-                "llm_status": "DONE",
-                "llm_summary": "LLM 분석 실패",
-            }).eq("dart_rcept_no", rcept_no).execute()
-        except Exception:
-            pass
 
 
 async def _enrich_ambiguity(

@@ -187,9 +187,10 @@ export default function IntroPage() {
         if (res.examples.length > 0) {
           setItems(res.examples);
         }
+        // API가 빈 배열을 반환하면 FALLBACK_EXAMPLES 유지 (하드코딩됨)
       })
       .catch(() => {
-        // fallback to hardcoded FALLBACK_EXAMPLES (already set as default)
+        // fallback to hardcoded FALLBACK_EXAMPLES
       })
       .finally(() => setLoaded(true));
   }, []);
@@ -255,7 +256,12 @@ export default function IntroPage() {
 
           {!loaded && (
             <div className="text-center mt-6 text-xs text-[var(--text-muted)] animate-pulse">
-              오늘의 공시를 불러오는 중...
+              오늘의 공시 예시를 불러오는 중...
+            </div>
+          )}
+          {loaded && items.length === 0 && (
+            <div className="text-center mt-6 text-xs text-[var(--text-muted)]">
+              오늘의 공시 예시는 매일 저녁 8시에 업데이트됩니다. 실시간 피드에서 최신 공시를 확인하세요.
             </div>
           )}
 
