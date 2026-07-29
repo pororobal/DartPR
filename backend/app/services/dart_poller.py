@@ -284,6 +284,19 @@ async def _process_disclosure(item: dict, skip_document: bool = False):
         logger.warning("Disclosure item missing rcept_no -- skipping")
         return
 
+    # Skip if already in DB (duplicate from a prior poll cycle)
+    supabase = get_supabase()
+    existing = (
+        supabase.table("disclosures")
+        .select("id")
+        .eq("dart_rcept_no", rcept_no)
+        .maybe_single()
+        .execute()
+    )
+    if existing.data:
+        logger.debug(f"Already have {rcept_no} -- skipping")
+        return
+
     # Skip document download for existing items, administrative disclosures, or SPV entities
     if skip_document or check_administrative(title) or _is_spv_entity(corp_name):
         raw_text = f"{corp_name} - {title}"
@@ -292,8 +305,6 @@ async def _process_disclosure(item: dict, skip_document: bool = False):
         if raw_text is None:
             raw_text = f"{corp_name} - {title}"
     raw_text = _clean_text(raw_text)
-
-    supabase = get_supabase()
 
     score_result = evaluate_disclosure(
         title=title,
