@@ -106,11 +106,18 @@ _ADMIN_PATTERNS = [
 ]
 
 
-# SPV/shell entity substrings — 유동화전문(유한)회사 and similar ABS SPVs.
-# These are not real operating companies; their disclosures are routine securitization filings.
+# SPV/shell entity substrings — these are not real operating companies;
+# their disclosures are routine securitization / shell-maintenance filings.
+# 유동화전문(유한)회사 = ABS SPV
+# 기업인수목적(유한)회사 / SPAC = M&A shell
+# 투자목적회사 / 사모투자전문회사 = investment vehicle
 _SPV_NAME_PATTERNS = [
     "유동화전문",
     "유동화전문회사",
+    "기업인수목적",
+    "투자목적회사",
+    "사모투자전문회사",
+    "SPAC",
 ]
 
 

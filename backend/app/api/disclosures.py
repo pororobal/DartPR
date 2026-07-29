@@ -201,6 +201,7 @@ async def company_suggest(
     result = (
         supabase.table("disclosures")
         .select("company_name, ticker")
+        .eq("is_feed_visible", True)
         .or_(or_filter)
         .limit(10)
         .execute()
@@ -251,9 +252,15 @@ async def get_history(
 
     Supports: q (unified search across ticker+company_name), ticker,
     company_name, category, score range, date range, risk_flag.
+
+    Only returns feed-visible disclosures (excludes SPVs, administrative noise).
     """
     supabase = get_supabase()
-    query = supabase.table("disclosures").select(_SELECT_COLS, count="estimated")
+    query = (
+        supabase.table("disclosures")
+        .select(_SELECT_COLS, count="estimated")
+        .eq("is_feed_visible", True)
+    )
 
     if q:
         query = query.or_(f"company_name.ilike.%{q}%,ticker.ilike.%{q}%")
@@ -324,7 +331,7 @@ async def reclassify_disclosures():
     supabase = get_supabase()
     result = (
         supabase.table("disclosures")
-        .select("id,dart_rcept_no,title,raw_text,ticker")
+        .select("id,dart_rcept_no,company_name,title,raw_text,ticker")
         .execute()
     )
     rows = result.data or []
@@ -335,9 +342,11 @@ async def reclassify_disclosures():
         title = row.get("title", "")
         raw_text = row.get("raw_text", "")
         ticker = row.get("ticker", "")
+        corp_name = row.get("company_name", "")
 
         score_result = evaluate_disclosure(
             title=title, raw_text=raw_text, ticker=ticker, supabase=supabase,
+            corp_name=corp_name,
         )
 
         supabase.table("disclosures").update({
