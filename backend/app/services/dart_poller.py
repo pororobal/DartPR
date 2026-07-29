@@ -22,6 +22,8 @@ from io import BytesIO
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
+KST = timezone(timedelta(hours=9))
+
 import httpx
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
@@ -155,8 +157,7 @@ OPENDART_DOCUMENT_URL = "https://opendart.fss.or.kr/api/document.xml"
 
 
 async def _fetch_disclosure_list() -> list[dict]:
-    kst = timezone(timedelta(hours=9))
-    today = datetime.now(kst)
+    today = datetime.now(KST)
     date_str = today.strftime("%Y%m%d")
 
     all_items: list[dict] = []
@@ -272,7 +273,7 @@ async def _process_disclosure(item: dict, skip_document: bool = False):
     if rcept_dt_str and len(rcept_dt_str) == 8:
         try:
             d = datetime.strptime(rcept_dt_str, "%Y%m%d")
-            published_at = d.replace(tzinfo=kst).astimezone(timezone.utc)
+            published_at = d.replace(tzinfo=KST).astimezone(timezone.utc)
         except ValueError:
             published_at = datetime.now(timezone.utc)
     else:
@@ -557,8 +558,7 @@ async def _enrich_ambiguity(
 
 async def poll_dart_once():
     # Use KST for all time-sensitive checks (DART operates on Korean time)
-    kst = timezone(timedelta(hours=9))
-    now_kst = datetime.now(kst)
+    now_kst = datetime.now(KST)
     hour_kst = now_kst.hour
 
     # Skip weekends (DART 제출 불가)
